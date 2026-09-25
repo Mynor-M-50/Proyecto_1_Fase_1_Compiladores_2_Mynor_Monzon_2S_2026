@@ -30,7 +30,11 @@ miembro
     ;
 
 campo
-    : tipo (LBRACKET RBRACKET)* ID (ASSIGN expresion)? SEMI
+    : modificador? tipo (LBRACKET RBRACKET)* ID (ASSIGN expresion)? SEMI
+    ;
+
+modificador
+    : PUBLIC | PRIVATE
     ;
 
 constructor
@@ -190,6 +194,7 @@ expresion
     | expresion QUESTION expresion COLON expresion               # expTernario
     | LBRACE (expresion (COMMA expresion)*)? RBRACE              # expArregloLiteral
     | ID                                                         # expId
+    | THIS                                                       # expThis
     | INT_LITERAL                                                # expEntero
     | DOUBLE_LITERAL                                             # expDecimal
     | CHAR_LITERAL                                               # expCaracter
@@ -207,6 +212,8 @@ argumentos
 // Palabras reservadas primero para que ganen sobre ID (misma longitud,
 // ANTLR4 resuelve el empate a favor de la regla declarada antes).
 PUBLIC    : 'public' ;
+PRIVATE   : 'private' ;
+THIS      : 'this' ;
 CLASS     : 'class' ;
 KW_INT    : 'int' ;
 KW_DOUBLE : 'double' ;
