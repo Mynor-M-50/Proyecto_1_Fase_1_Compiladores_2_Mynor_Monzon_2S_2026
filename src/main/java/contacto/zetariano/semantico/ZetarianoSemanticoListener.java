@@ -49,12 +49,15 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
     private final RecolectorErrores errores;
     private final ParseTreeProperty<Tipo> tipos = new ParseTreeProperty<>();
 
+    private final String nombreArchivo;
     private String nombreClaseActual;
     private Tipo tipoRetornoActual;
     private int profundidadCiclo;
+    private int profundidadSwitch; // "break" vale dentro de un switch; "continue" no
 
-    public ZetarianoSemanticoListener(RecolectorErrores errores) {
+    public ZetarianoSemanticoListener(RecolectorErrores errores, String nombreArchivo) {
         this.errores = errores;
+        this.nombreArchivo = nombreArchivo;
     }
 
     public TablaSimbolos getTabla() {
@@ -73,16 +76,25 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
     @Override
     public void enterClase(ClaseContext ctx) {
         nombreClaseActual = ctx.ID().getText();
+        // Pre-registro: declaramos la firma de TODO miembro (campo, ctor,
+        // metodo) antes de revisar ningun cuerpo, para que el orden de
+        // declaracion no importe (igual que en Java: un metodo puede
+        // llamar a otro declarado mas abajo). Sin esto, "obtenerCima()"
+        // llamando a "estaVacia()" declarado despues fallaba con "no
+        // existe el metodo", aunque fuera perfectamente valido.
+        for (MiembroContext miembro : ctx.miembro()) {
+            if (miembro.campo() != null) {
+                preRegistrarCampo(miembro.campo());
+            } else if (miembro.constructor() != null) {
+                preRegistrarConstructor(miembro.constructor());
+            } else if (miembro.metodo() != null) {
+                preRegistrarMetodo(miembro.metodo());
+            }
+        }
     }
 
-    @Override
-    public void exitCampo(CampoContext ctx) {
+    private void preRegistrarCampo(CampoContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo(), contarCorchetes(ctx.LBRACKET()));
-
-        if (ctx.expresion() != null) {
-            validarInicializador(ctx.expresion(), tipo, ctx);
-        }
-
         Simbolo simbolo = new Simbolo(ctx.ID().getText(), tipo, RolSimbolo.VARIABLE,
                 linea(ctx), columna(ctx));
         if (!tabla.declarar(simbolo)) {
@@ -91,15 +103,13 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
-    @Override
-    public void enterConstructor(ConstructorContext ctx) {
+    private void preRegistrarConstructor(ConstructorContext ctx) {
         String nombre = ctx.ID().getText();
         if (!nombre.equals(nombreClaseActual)) {
             error("El nombre del constructor ('" + nombre
                     + "') debe coincidir con el nombre de la clase ('"
                     + nombreClaseActual + "')", ctx);
         }
-
         int aridad = (ctx.parametros() != null) ? ctx.parametros().parametro().size() : 0;
         Simbolo simbolo = new Simbolo(claveSobrecarga(nombre, aridad),
                 Tipo.estructura(nombreClaseActual), RolSimbolo.CONSTRUCTOR,
@@ -108,7 +118,37 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
             error("Ya existe un constructor de '" + nombreClaseActual
                     + "' con " + aridad + " parametro(s)", ctx);
         }
+    }
 
+    private void preRegistrarMetodo(MetodoContext ctx) {
+        String nombre = ctx.ID().getText();
+        Tipo tipoRetorno = (ctx.VOID() != null)
+                ? Tipo.vacio()
+                : resolverTipo(ctx.tipo(), contarCorchetes(ctx.LBRACKET()));
+        int aridad = (ctx.parametros() != null) ? ctx.parametros().parametro().size() : 0;
+        Simbolo simbolo = new Simbolo(claveSobrecarga(nombre, aridad), tipoRetorno,
+                RolSimbolo.METODO, linea(ctx), columna(ctx));
+        if (!tabla.declarar(simbolo)) {
+            error("Ya existe un metodo '" + nombre + "' con " + aridad + " parametro(s)", ctx);
+        }
+    }
+
+    @Override
+    public void exitCampo(CampoContext ctx) {
+        // El simbolo ya se declaro en el pre-registro (enterClase); aqui
+        // solo falta validar el inicializador, que ya tiene su tipo
+        // resuelto porque exitCampo dispara DESPUES de recorrer su
+        // expresion hija.
+        if (ctx.expresion() != null) {
+            Tipo tipo = resolverTipo(ctx.tipo(), contarCorchetes(ctx.LBRACKET()));
+            validarInicializador(ctx.expresion(), tipo, ctx);
+        }
+    }
+
+    @Override
+    public void enterConstructor(ConstructorContext ctx) {
+        // La firma ya se pre-registro; aqui solo entramos al ambito de
+        // parametros del cuerpo.
         tabla.entrarAmbito("constructor");
         declararParametros(ctx.parametros());
         tipoRetornoActual = Tipo.vacio();
@@ -122,19 +162,11 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
 
     @Override
     public void enterMetodo(MetodoContext ctx) {
-        String nombre = ctx.ID().getText();
         Tipo tipoRetorno = (ctx.VOID() != null)
                 ? Tipo.vacio()
                 : resolverTipo(ctx.tipo(), contarCorchetes(ctx.LBRACKET()));
 
-        int aridad = (ctx.parametros() != null) ? ctx.parametros().parametro().size() : 0;
-        Simbolo simbolo = new Simbolo(claveSobrecarga(nombre, aridad), tipoRetorno,
-                RolSimbolo.METODO, linea(ctx), columna(ctx));
-        if (!tabla.declarar(simbolo)) {
-            error("Ya existe un metodo '" + nombre + "' con " + aridad + " parametro(s)", ctx);
-        }
-
-        tabla.entrarAmbito("metodo " + nombre);
+        tabla.entrarAmbito("metodo " + ctx.ID().getText());
         declararParametros(ctx.parametros());
         tipoRetornoActual = tipoRetorno;
     }
@@ -274,7 +306,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
 
     @Override
     public void exitSentenciaBreak(SentenciaBreakContext ctx) {
-        if (profundidadCiclo == 0) {
+        if (profundidadCiclo == 0 && profundidadSwitch == 0) {
             error("'break' solo se puede usar dentro de un ciclo o un switch", ctx);
         }
     }
@@ -320,7 +352,13 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
     }
 
     @Override
+    public void enterSentenciaSwitch(SentenciaSwitchContext ctx) {
+        profundidadSwitch++;
+    }
+
+    @Override
     public void exitSentenciaSwitch(SentenciaSwitchContext ctx) {
+        profundidadSwitch--;
         // El selector de un switch NO tiene que ser booleano (a diferencia
         // de si/mientras): solo pedimos que sea un valor simple, no un
         // arreglo ni un objeto.
@@ -546,6 +584,22 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
     }
 
     @Override
+    public void exitExpLlamadaLocal(ExpLlamadaLocalContext ctx) {
+        // Llamada a un metodo de ESTA clase sin "this." explicito
+        // (this.metodo() implicito, igual que en Java).
+        String nombre = ctx.ID().getText();
+        int aridad = (ctx.argumentos() != null) ? ctx.argumentos().expresion().size() : 0;
+        Simbolo simbolo = tabla.buscarTipoDefinido(claveSobrecarga(nombre, aridad));
+        if (simbolo == null) {
+            error("No existe el metodo '" + nombre + "' con " + aridad
+                    + " argumento(s) en la clase '" + nombreClaseActual + "'", ctx);
+            tipos.put(ctx, Tipo.error());
+        } else {
+            tipos.put(ctx, simbolo.getTipo());
+        }
+    }
+
+    @Override
     public void exitExpLlamadaMetodo(ExpLlamadaMetodoContext ctx) {
         Tipo base = tipoDe(ctx.expresion());
         String nombreMetodo = ctx.ID().getText();
@@ -706,6 +760,6 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
     }
 
     private void error(String mensaje, ParserRuleContext ctx) {
-        errores.agregar(TipoError.SEMANTICO, mensaje, linea(ctx), columna(ctx));
+        errores.agregar(TipoError.SEMANTICO, mensaje, linea(ctx), columna(ctx), nombreArchivo);
     }
 }

@@ -1,21 +1,33 @@
 package contacto.comun.cuartetas;
 
-/** return valor   (valor es null para un retorno sin valor). */
+import contacto.comun.cuartetas.acceso.Lugar;
+
+/** return valor;   (valor es null para un retorno sin valor). */
 public class RetornoCuarteta extends Cuarteta {
 
-    private final String valor;
+    private final Lugar valor;
 
-    public RetornoCuarteta(int numero, String valor) {
+    public RetornoCuarteta(int numero, Lugar valor) {
         super(numero);
         this.valor = valor;
     }
 
-    public String getValor() {
+    public Lugar getValor() {
         return valor;
     }
 
     @Override
+    public void generarC(StringBuilder codigo) {
+        codigo.append("return");
+        if (valor != null) {
+            codigo.append(' ');
+            valor.generarC(codigo);
+        }
+        codigo.append(";\n");
+    }
+
+    @Override
     public String toString() {
-        return getNumero() + ": return " + (valor != null ? valor : "");
+        return getNumero() + ": return " + (valor != null ? valor.toString() : "");
     }
 }

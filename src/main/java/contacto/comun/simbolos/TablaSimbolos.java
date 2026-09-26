@@ -1,7 +1,9 @@
 package contacto.comun.simbolos;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 
 /**
  * Pila de ambitos (scopes). Un mismo objeto se comparte entre el
@@ -19,6 +21,12 @@ import java.util.Deque;
 public class TablaSimbolos {
 
     private final Deque<Ambito> pila = new ArrayDeque<>();
+
+    // Historial de TODO lo declarado alguna vez, sin importar si su
+    // ambito ya se cerro. El generador de codigo C lo usa para saber
+    // que variables declarar al inicio del programa (los ambitos en si
+    // se pierden apenas se hace salirAmbito()).
+    private final List<Simbolo> historial = new ArrayList<>();
 
     public TablaSimbolos() {
         pila.push(new Ambito("global", null));
@@ -39,7 +47,15 @@ public class TablaSimbolos {
     }
 
     public boolean declarar(Simbolo simbolo) {
-        return pila.peek().declarar(simbolo);
+        boolean exito = pila.peek().declarar(simbolo);
+        if (exito) {
+            historial.add(simbolo);
+        }
+        return exito;
+    }
+
+    public List<Simbolo> getHistorial() {
+        return historial;
     }
 
     public Simbolo buscar(String nombre) {
@@ -60,3 +76,4 @@ public class TablaSimbolos {
         return (global != null) ? global.buscarLocal(nombre) : null;
     }
 }
+

@@ -30,12 +30,14 @@ programa
     : NEWLINE* seccionEstructuras? seccionFunciones EOF
     ;
 
+// Las secciones NO indentan su contenido: en el utils.y real, "definir"
+// va en la columna 0 justo debajo de "%funciones".
 seccionEstructuras
-    : SECCION_ESTRUCTURAS NEWLINE INDENT estructura+ DEDENT
+    : SECCION_ESTRUCTURAS NEWLINE estructura+
     ;
 
 seccionFunciones
-    : SECCION_FUNCIONES NEWLINE INDENT funcionDef+ DEDENT
+    : SECCION_FUNCIONES NEWLINE funcionDef+
     ;
 
 estructura

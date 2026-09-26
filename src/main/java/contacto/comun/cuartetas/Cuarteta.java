@@ -1,13 +1,14 @@
 package contacto.comun.cuartetas;
 
 /**
- * Una cuarteta de codigo de tres direcciones (C3D). Cada subtipo
- * concreto sabe imprimirse a si mismo en el formato de depuracion
- * (toString) que se muestra en pantalla; la traduccion a C vive aparte
- * en comun.codegen, para no mezclar "que es una cuarteta" con "como
- * se ve en C" (eso lo arma un visitor/switch sobre estas clases).
+ * Una cuarteta de codigo de tres direcciones (C3D). Cada subtipo sabe
+ * imprimirse en el formato de depuracion (toString) Y generar su
+ * propio fragmento de C (generarC) -- adoptado del patron
+ * CodeTransformable del repo de referencia de la auxiliar, en vez de
+ * un generador de C aparte con un switch gigante sobre el tipo de cada
+ * cuarteta.
  */
-public abstract class Cuarteta {
+public abstract class Cuarteta implements CodigoTransformable {
 
     private final int numero;
 

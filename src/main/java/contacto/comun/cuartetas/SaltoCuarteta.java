@@ -15,6 +15,11 @@ public class SaltoCuarteta extends Cuarteta {
     }
 
     @Override
+    public void generarC(StringBuilder codigo) {
+        codigo.append("goto ").append(etiquetaDestino).append(";\n");
+    }
+
+    @Override
     public String toString() {
         return getNumero() + ": goto " + etiquetaDestino;
     }

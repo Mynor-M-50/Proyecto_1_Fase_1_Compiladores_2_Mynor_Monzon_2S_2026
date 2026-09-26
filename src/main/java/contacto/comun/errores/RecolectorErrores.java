@@ -15,8 +15,8 @@ public final class RecolectorErrores {
 
     private final List<ErrorCompilacion> errores = new ArrayList<>();
 
-    public void agregar(TipoError tipo, String mensaje, int linea, int columna) {
-        errores.add(new ErrorCompilacion(tipo, mensaje, linea, columna));
+    public void agregar(TipoError tipo, String mensaje, int linea, int columna, String archivo) {
+        errores.add(new ErrorCompilacion(tipo, mensaje, linea, columna, archivo));
     }
 
     public boolean tieneErrores() {

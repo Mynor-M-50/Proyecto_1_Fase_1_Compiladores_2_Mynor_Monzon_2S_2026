@@ -1,23 +1,33 @@
 package contacto.comun.cuartetas;
 
+import contacto.comun.cuartetas.acceso.Lugar;
+
 /** destino = origen  (copia directa, sin operador). */
 public class AsignacionCuarteta extends Cuarteta {
 
-    private final String destino;
-    private final String origen;
+    private final Lugar destino;
+    private final Lugar origen;
 
-    public AsignacionCuarteta(int numero, String destino, String origen) {
+    public AsignacionCuarteta(int numero, Lugar destino, Lugar origen) {
         super(numero);
         this.destino = destino;
         this.origen = origen;
     }
 
-    public String getDestino() {
+    public Lugar getDestino() {
         return destino;
     }
 
-    public String getOrigen() {
+    public Lugar getOrigen() {
         return origen;
+    }
+
+    @Override
+    public void generarC(StringBuilder codigo) {
+        destino.generarC(codigo);
+        codigo.append(" = ");
+        origen.generarC(codigo);
+        codigo.append(";\n");
     }
 
     @Override

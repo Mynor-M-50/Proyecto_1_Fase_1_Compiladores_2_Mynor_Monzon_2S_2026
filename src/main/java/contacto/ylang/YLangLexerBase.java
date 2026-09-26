@@ -39,6 +39,7 @@ public abstract class YLangLexerBase extends Lexer {
     private final Deque<Integer> indentStack = new ArrayDeque<>();
     private int nestingLevel = 0;
     private boolean vioPrimerTokenReal = false;
+    private int ultimoTipoEmitido = -1;
 
     protected YLangLexerBase(CharStream input) {
         super(input);
@@ -47,6 +48,12 @@ public abstract class YLangLexerBase extends Lexer {
 
     @Override
     public Token nextToken() {
+        Token token = siguienteToken();
+        ultimoTipoEmitido = token.getType();
+        return token;
+    }
+
+    private Token siguienteToken() {
         if (!pendingTokens.isEmpty()) {
             return pendingTokens.poll();
         }
@@ -113,6 +120,16 @@ public abstract class YLangLexerBase extends Lexer {
     }
 
     private Token procesarEOF(Token raw) {
+        // Toda sentencia termina en NEWLINE, pero el NEWLINE_RAW final
+        // (si lo hay) se descarta en procesarNewline() y el archivo puede
+        // ni siquiera terminar en salto de linea: cerramos la ultima
+        // linea aqui, antes de los DEDENT finales (igual que en las
+        // gramaticas de Python de grammars-v4).
+        if (vioPrimerTokenReal
+                && ultimoTipoEmitido != YLangLexer.NEWLINE
+                && ultimoTipoEmitido != Token.EOF) {
+            pendingTokens.add(fabricarToken(YLangLexer.NEWLINE, raw, "<NEWLINE>"));
+        }
         while (indentStack.size() > 1) {
             indentStack.pop();
             pendingTokens.add(fabricarToken(YLangLexer.DEDENT, raw, "<DEDENT>"));

@@ -176,6 +176,7 @@ expresion
     : PRINTLN LPAREN expresion? RPAREN                         # expLlamadaPrintln
     | PRINT LPAREN expresion? RPAREN                            # expLlamadaPrint
     | READLN LPAREN RPAREN                                      # expLlamadaReadln
+    | ID LPAREN argumentos? RPAREN                              # expLlamadaLocal
     | NEW ID LPAREN argumentos? RPAREN                          # expNuevoObjeto
     | NEW tipoPrimitivo (LBRACKET expresion RBRACKET)+          # expNuevoArreglo
     | expresion LBRACKET expresion RBRACKET                     # expIndice

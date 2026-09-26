@@ -1,9 +1,23 @@
 package contacto.zetariano.generador;
 
+import contacto.comun.codegen.AmbitosGeneracion;
+import contacto.comun.codegen.ModeloPrograma;
+import contacto.comun.codegen.RuntimeC;
 import contacto.comun.cuartetas.GeneradorCuartetas;
+import contacto.comun.cuartetas.acceso.CampoLugar;
+import contacto.comun.cuartetas.acceso.IndiceLugar;
+import contacto.comun.cuartetas.acceso.LiteralLugar;
+import contacto.comun.cuartetas.acceso.Lugar;
+import contacto.comun.cuartetas.acceso.NombreLugar;
+import contacto.comun.errores.RecolectorErrores;
+import contacto.comun.errores.TipoError;
+import contacto.comun.tipos.Operador;
+import contacto.comun.tipos.TablaTipos;
 import contacto.comun.tipos.Tipo;
 import contacto.zetariano.ZetarianoBaseVisitor;
 import contacto.zetariano.ZetarianoParser.*;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeProperty;
 
 import java.util.ArrayDeque;
@@ -13,44 +27,48 @@ import java.util.List;
 
 /**
  * Genera cuartetas (C3D) para un archivo .z YA validado por
- * {@link contacto.zetariano.semantico.ZetarianoSemanticoListener}. Se le
- * pasa el mapa de tipos que ese listener resolvio, por si hace falta
- * mas adelante (p.ej. el generador de C necesitara saber si un "+" es
- * concatenacion de cadenas o suma numerica); hoy no se usa a fondo,
- * queda disponible.
+ * ZetarianoSemanticoListener. Visitor (no Listener) para controlar el
+ * orden de saltos y etiquetas. Cada visitExpXxx devuelve el Lugar
+ * donde queda el valor (variable/temporal/literal/campo/indice), o
+ * null si la expresion no produce valor (llamada a un metodo void).
  *
- * Por que Visitor y no Listener (a diferencia del semantico): generar
- * saltos para if/while/for requiere controlar el ORDEN exacto en que
- * se emite cada cosa (evaluar condicion -> emitir salto -> AHI SI
- * visitar el cuerpo -> poner la etiqueta de salida). Un Listener
- * recorre todos los hijos automaticamente antes de que el padre pueda
- * reaccionar; un Visitor deja que este codigo decida cuando llamar
- * visit(...) sobre cada hijo, que es justo lo que hace falta aca.
+ * Se usa en dos pasos (ver OrquestadorPig):
+ *   1. registrarFirmas(): registra en el ModeloPrograma la clase, sus
+ *      campos, constructores y metodos -- antes de generar el cuerpo de
+ *      NINGUN archivo, para que Pila.z pueda llamar a Nodo.getDato().
+ *   2. visit(): genera el cuerpo de cada constructor/metodo como una
+ *      funcion de C aparte.
  *
- * Cada visitExpXxx devuelve el "lugar" (nombre de variable, temporal
- * generado, o literal como texto) donde queda el valor de esa
- * expresion, para que su nodo padre lo use directamente.
- *
- * Limitaciones conocidas de hoy (pendientes para manana):
- *   - Los literales de arreglo ({1,2,3}) no generan todavia las
- *     asignaciones elemento por elemento.
- *   - "new Tipo[n]" no reserva memoria real, solo deja una cuarteta
- *     simbolica -- la reserva real se resuelve en comun.codegen.
- *   - Los nombres de variable se usan tal cual (sin distinguir por
- *     ambito), asi que dos variables con el mismo nombre en scopes
- *     distintos podrian chocar en las cuartetas. Bien para probar el
- *     flujo hoy; hay que revisitar antes de generar C de verdad.
+ * El semantico analiza cada .z por separado, asi que para llamadas y
+ * campos de OTRA clase (cima.getDato() dentro de Pila) su tipo queda en
+ * "error". Aqui ya se conocen todas las clases (ModeloPrograma): esos
+ * tipos se calculan de nuevo, y si el metodo o campo no existe se
+ * reporta como error semantico.
  */
-public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
+public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
 
     private final GeneradorCuartetas gen = new GeneradorCuartetas();
-    private final ParseTreeProperty<Tipo> tipos;
+    private final ParseTreeProperty<Tipo> tiposSemantico;
+    private final ParseTreeProperty<Tipo> tiposCalculados = new ParseTreeProperty<>();
+    private final ModeloPrograma modelo;
+    private final RecolectorErrores errores;
+    private final String nombreArchivo;
 
-    // pila de {etiquetaContinua, etiquetaFin} del ciclo/switch mas interno activo
+    private final ParseTreeProperty<ModeloPrograma.Funcion> funcionDe = new ParseTreeProperty<>();
+    private ModeloPrograma.Funcion constructorImplicito;
+    private String claseActual;
+    private ModeloPrograma.Funcion funcionActual;
+    private AmbitosGeneracion ambitos;
+
+    // {etiquetaContinua, etiquetaFin} del ciclo/switch mas interno activo
     private final Deque<String[]> pilaControlFlujo = new ArrayDeque<>();
 
-    public ZetarianoGeneradorCuartetas(ParseTreeProperty<Tipo> tipos) {
-        this.tipos = tipos;
+    public ZetarianoGeneradorCuartetas(ParseTreeProperty<Tipo> tipos, ModeloPrograma modelo,
+                                       RecolectorErrores errores, String nombreArchivo) {
+        this.tiposSemantico = tipos;
+        this.modelo = modelo;
+        this.errores = errores;
+        this.nombreArchivo = nombreArchivo;
     }
 
     public GeneradorCuartetas getGenerador() {
@@ -58,17 +76,77 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
     }
 
     // =====================================================================
-    // Programa / clase / miembros
+    // Paso 1: firmas
+    // =====================================================================
+
+    public void registrarFirmas(ProgramaContext programa) {
+        ClaseContext clase = programa.clase();
+        String nombreClase = clase.ID().getText();
+        ModeloPrograma.Estructura estructura = modelo.registrarEstructura(nombreClase, true);
+
+        boolean tieneConstructor = false;
+        for (MiembroContext miembro : clase.miembro()) {
+            if (miembro.campo() != null) {
+                CampoContext campo = miembro.campo();
+                Tipo tipo = resolverTipo(campo.tipo(), campo.LBRACKET().size());
+                estructura.agregarCampo(new ModeloPrograma.Variable(campo.ID().getText(), tipo));
+            } else if (miembro.constructor() != null) {
+                ConstructorContext ctor = miembro.constructor();
+                ModeloPrograma.Funcion funcion = new ModeloPrograma.Funcion(ctor.ID().getText(), nombreClase,
+                        true, false, Tipo.estructura(nombreClase), parametros(ctor.parametros()), ctor);
+                modelo.agregarFuncion(funcion);
+                funcionDe.put(ctor, funcion);
+                tieneConstructor = true;
+            } else if (miembro.metodo() != null) {
+                MetodoContext metodo = miembro.metodo();
+                Tipo retorno = (metodo.VOID() != null)
+                        ? Tipo.vacio()
+                        : resolverTipo(metodo.tipo(), metodo.LBRACKET().size());
+                ModeloPrograma.Funcion funcion = new ModeloPrograma.Funcion(metodo.ID().getText(), nombreClase,
+                        false, false, retorno, parametros(metodo.parametros()), metodo);
+                modelo.agregarFuncion(funcion);
+                funcionDe.put(metodo, funcion);
+            }
+        }
+
+        if (!tieneConstructor) {
+            // Igual que en Java: sin constructor explicito hay uno vacio
+            // (que igual inicializa los campos con valor por defecto).
+            constructorImplicito = new ModeloPrograma.Funcion(nombreClase, nombreClase, true, false,
+                    Tipo.estructura(nombreClase), new ArrayList<>(), clase);
+            modelo.agregarFuncion(constructorImplicito);
+        }
+    }
+
+    private List<ModeloPrograma.Variable> parametros(ParametrosContext ctx) {
+        List<ModeloPrograma.Variable> lista = new ArrayList<>();
+        if (ctx != null) {
+            for (ParametroContext parametro : ctx.parametro()) {
+                Tipo tipo = resolverTipo(parametro.tipo(), parametro.LBRACKET().size());
+                lista.add(new ModeloPrograma.Variable(parametro.ID().getText(), tipo));
+            }
+        }
+        return lista;
+    }
+
+    // =====================================================================
+    // Paso 2: cuerpos
     // =====================================================================
 
     @Override
-    public String visitPrograma(ProgramaContext ctx) {
+    public Lugar visitPrograma(ProgramaContext ctx) {
         visit(ctx.clase());
         return null;
     }
 
     @Override
-    public String visitClase(ClaseContext ctx) {
+    public Lugar visitClase(ClaseContext ctx) {
+        claseActual = ctx.ID().getText();
+        if (constructorImplicito != null) {
+            iniciarFuncion(constructorImplicito, "inicio_" + claseActual + "_constructor");
+            inicializarCampos(ctx);
+            terminarFuncion();
+        }
         for (MiembroContext miembro : ctx.miembro()) {
             visit(miembro);
         }
@@ -76,29 +154,53 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
     }
 
     @Override
-    public String visitCampo(CampoContext ctx) {
-        // Los campos no generan cuartetas por si solos; su inicializacion
-        // (si la hay) se resuelve al generar el constructor en C, en
-        // comun.codegen (manana), no aqui.
+    public Lugar visitCampo(CampoContext ctx) {
+        return null; // su valor inicial se asigna dentro de cada constructor (inicializarCampos)
+    }
+
+    @Override
+    public Lugar visitConstructor(ConstructorContext ctx) {
+        iniciarFuncion(funcionDe.get(ctx), "inicio_" + ctx.ID().getText() + "_constructor");
+        inicializarCampos((ClaseContext) ctx.getParent().getParent());
+        for (SentenciaContext sentencia : ctx.bloque().sentencia()) {
+            visit(sentencia);
+        }
+        terminarFuncion();
         return null;
     }
 
     @Override
-    public String visitConstructor(ConstructorContext ctx) {
-        gen.emitirEtiqueta("inicio_" + ctx.ID().getText() + "_constructor");
+    public Lugar visitMetodo(MetodoContext ctx) {
+        iniciarFuncion(funcionDe.get(ctx), "inicio_" + ctx.ID().getText());
         for (SentenciaContext sentencia : ctx.bloque().sentencia()) {
             visit(sentencia);
         }
+        terminarFuncion();
         return null;
     }
 
-    @Override
-    public String visitMetodo(MetodoContext ctx) {
-        gen.emitirEtiqueta("inicio_" + ctx.ID().getText());
-        for (SentenciaContext sentencia : ctx.bloque().sentencia()) {
-            visit(sentencia);
+    private void iniciarFuncion(ModeloPrograma.Funcion funcion, String etiqueta) {
+        funcionActual = funcion;
+        ambitos = new AmbitosGeneracion(funcion);
+        funcion.iniciarCuerpo(gen);
+        gen.emitirEtiqueta(etiqueta);
+    }
+
+    private void terminarFuncion() {
+        funcionActual.terminarCuerpo();
+        funcionActual = null;
+        ambitos = null;
+    }
+
+    /** "int x = 5;" en la clase: se asigna al inicio de cada constructor, como en Java. */
+    private void inicializarCampos(ClaseContext clase) {
+        for (MiembroContext miembro : clase.miembro()) {
+            CampoContext campo = miembro.campo();
+            if (campo != null && campo.expresion() != null) {
+                Lugar valor = valor(campo.expresion());
+                gen.emitirAsignacion(lugarCampo(new NombreLugar("this"), claseActual, campo.ID().getText()), valor);
+            }
         }
-        return null;
     }
 
     // =====================================================================
@@ -106,32 +208,49 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
     // =====================================================================
 
     @Override
-    public String visitBloque(BloqueContext ctx) {
+    public Lugar visitBloque(BloqueContext ctx) {
+        ambitos.entrar();
         for (SentenciaContext sentencia : ctx.sentencia()) {
             visit(sentencia);
         }
+        ambitos.salir();
         return null;
     }
 
     @Override
-    public String visitDeclaracionVariable(DeclaracionVariableContext ctx) {
-        if (ctx.expresion() != null) {
-            String origen = visit(ctx.expresion());
-            gen.emitirAsignacion(ctx.ID().getText(), origen);
+    public Lugar visitDeclaracionVariable(DeclaracionVariableContext ctx) {
+        Tipo tipo = resolverTipo(ctx.tipo(), ctx.LBRACKET().size());
+        declararLocal(ctx.ID().getText(), tipo, ctx.expresion());
+        return null;
+    }
+
+    @Override
+    public Lugar visitDeclaracionVariableSinPuntoYComa(DeclaracionVariableSinPuntoYComaContext ctx) {
+        Tipo tipo = resolverTipo(ctx.tipo(), ctx.LBRACKET().size());
+        declararLocal(ctx.ID().getText(), tipo, ctx.expresion());
+        return null;
+    }
+
+    private void declararLocal(String nombre, Tipo tipo, ExpresionContext inicial) {
+        // El valor inicial se evalua ANTES de declarar: en "int x = x + 1"
+        // la x de la derecha no puede ser la nueva.
+        Lugar origen = (inicial != null) ? valor(inicial) : null;
+        String nombreC = ambitos.declarar(nombre, tipo);
+        if (origen != null) {
+            gen.emitirAsignacion(new NombreLugar(nombreC), origen);
         }
-        return null;
     }
 
     @Override
-    public String visitSentenciaExpresion(SentenciaExpresionContext ctx) {
+    public Lugar visitSentenciaExpresion(SentenciaExpresionContext ctx) {
         List<ExpresionContext> expresiones = ctx.expresion();
         if (expresiones.size() < 2) {
-            visit(expresiones.get(0)); // llamada/expresion suelta, por su efecto
+            visitarSinValor(expresiones.get(0));
             return null;
         }
 
-        String destino = visit(expresiones.get(0)); // lugar, no un valor a leer
-        String origen = visit(expresiones.get(1));
+        Lugar destino = valor(expresiones.get(0));
+        Lugar origen = valor(expresiones.get(1));
         OperadorAsignacionContext op = ctx.operadorAsignacion();
 
         if (op.ASSIGN() != null) {
@@ -139,19 +258,20 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
         } else {
             String operador = (op.PLUS_ASSIGN() != null) ? "+"
                     : (op.MINUS_ASSIGN() != null) ? "-" : "*";
-            gen.emitirOperacionBinaria(destino, destino, operador, origen);
+            gen.emitirOperacionBinaria(destino, destino, operador, origen,
+                    tipo(expresiones.get(0)), tipo(expresiones.get(1)));
         }
         return null;
     }
 
     @Override
-    public String visitSentenciaIf(SentenciaIfContext ctx) {
+    public Lugar visitSentenciaIf(SentenciaIfContext ctx) {
         List<ExpresionContext> condiciones = ctx.expresion();
         List<SentenciaOBloqueContext> cuerpos = ctx.sentenciaOBloque();
         String etiquetaFin = gen.nuevaEtiqueta();
 
         for (int i = 0; i < condiciones.size(); i++) {
-            String condicion = visit(condiciones.get(i));
+            Lugar condicion = valor(condiciones.get(i));
             String etiquetaSiguiente = gen.nuevaEtiqueta();
             gen.emitirSaltoSiFalso(condicion, etiquetaSiguiente);
             visit(cuerpos.get(i));
@@ -160,7 +280,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
         }
 
         if (cuerpos.size() > condiciones.size()) {
-            visit(cuerpos.get(cuerpos.size() - 1)); // rama "else" final, si existe
+            visit(cuerpos.get(cuerpos.size() - 1));
         }
 
         gen.emitirEtiqueta(etiquetaFin);
@@ -168,22 +288,24 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
     }
 
     @Override
-    public String visitSentenciaOBloque(SentenciaOBloqueContext ctx) {
+    public Lugar visitSentenciaOBloque(SentenciaOBloqueContext ctx) {
         if (ctx.bloque() != null) {
             visit(ctx.bloque());
         } else {
+            ambitos.entrar();
             visit(ctx.sentencia());
+            ambitos.salir();
         }
         return null;
     }
 
     @Override
-    public String visitSentenciaWhile(SentenciaWhileContext ctx) {
+    public Lugar visitSentenciaWhile(SentenciaWhileContext ctx) {
         String etiquetaInicio = gen.nuevaEtiqueta();
         String etiquetaFin = gen.nuevaEtiqueta();
 
         gen.emitirEtiqueta(etiquetaInicio);
-        String condicion = visit(ctx.expresion());
+        Lugar condicion = valor(ctx.expresion());
         gen.emitirSaltoSiFalso(condicion, etiquetaFin);
 
         pilaControlFlujo.push(new String[]{etiquetaInicio, etiquetaFin});
@@ -196,7 +318,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
     }
 
     @Override
-    public String visitSentenciaDoWhile(SentenciaDoWhileContext ctx) {
+    public Lugar visitSentenciaDoWhile(SentenciaDoWhileContext ctx) {
         String etiquetaInicio = gen.nuevaEtiqueta();
         String etiquetaContinua = gen.nuevaEtiqueta();
         String etiquetaFin = gen.nuevaEtiqueta();
@@ -208,14 +330,15 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
         pilaControlFlujo.pop();
 
         gen.emitirEtiqueta(etiquetaContinua);
-        String condicion = visit(ctx.expresion());
+        Lugar condicion = valor(ctx.expresion());
         gen.emitirSaltoSiVerdadero(condicion, etiquetaInicio);
         gen.emitirEtiqueta(etiquetaFin);
         return null;
     }
 
     @Override
-    public String visitSentenciaFor(SentenciaForContext ctx) {
+    public Lugar visitSentenciaFor(SentenciaForContext ctx) {
+        ambitos.entrar(); // la variable del for solo existe dentro del for
         if (ctx.forInit() != null) {
             visit(ctx.forInit());
         }
@@ -226,7 +349,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
 
         gen.emitirEtiqueta(etiquetaInicio);
         if (ctx.expresion() != null) {
-            String condicion = visit(ctx.expresion());
+            Lugar condicion = valor(ctx.expresion());
             gen.emitirSaltoSiFalso(condicion, etiquetaFin);
         }
 
@@ -240,11 +363,12 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
         }
         gen.emitirSalto(etiquetaInicio);
         gen.emitirEtiqueta(etiquetaFin);
+        ambitos.salir();
         return null;
     }
 
     @Override
-    public String visitForInit(ForInitContext ctx) {
+    public Lugar visitForInit(ForInitContext ctx) {
         if (ctx.declaracionVariableSinPuntoYComa() != null) {
             visit(ctx.declaracionVariableSinPuntoYComa());
         } else {
@@ -254,56 +378,84 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
     }
 
     @Override
-    public String visitDeclaracionVariableSinPuntoYComa(DeclaracionVariableSinPuntoYComaContext ctx) {
-        if (ctx.expresion() != null) {
-            String origen = visit(ctx.expresion());
-            gen.emitirAsignacion(ctx.ID().getText(), origen);
-        }
-        return null;
-    }
-
-    @Override
-    public String visitForUpdate(ForUpdateContext ctx) {
+    public Lugar visitForUpdate(ForUpdateContext ctx) {
         visit(ctx.expresionLista());
         return null;
     }
 
     @Override
-    public String visitExpresionLista(ExpresionListaContext ctx) {
+    public Lugar visitExpresionLista(ExpresionListaContext ctx) {
         for (ExpresionContext expresion : ctx.expresion()) {
-            visit(expresion);
+            visitarSinValor(expresion);
         }
         return null;
     }
 
+    /**
+     * Una expresion usada como sentencia ("i++;", el update de un for):
+     * su valor no se usa, asi que "i++" no necesita guardar el valor
+     * anterior en un temporal.
+     */
+    private void visitarSinValor(ExpresionContext ctx) {
+        if (ctx instanceof ExpIncDecSufijoContext) {
+            ExpIncDecSufijoContext incDec = (ExpIncDecSufijoContext) ctx;
+            Lugar lugar = valor(incDec.expresion());
+            gen.emitirOperacionBinaria(lugar, lugar, (incDec.INC() != null) ? "+" : "-", new LiteralLugar("1"));
+        } else {
+            visit(ctx);
+        }
+    }
+
     @Override
-    public String visitSentenciaSwitch(SentenciaSwitchContext ctx) {
-        String selector = visit(ctx.expresion());
+    public Lugar visitSentenciaSwitch(SentenciaSwitchContext ctx) {
+        Lugar selector = valor(ctx.expresion());
+        Tipo tipoSelector = tipo(ctx.expresion());
         String etiquetaFin = gen.nuevaEtiqueta();
 
-        pilaControlFlujo.push(new String[]{etiquetaFin, etiquetaFin}); // "break" salta a fin
-        for (CasoSwitchContext caso : ctx.casoSwitch()) {
-            String etiquetaSiguiente = gen.nuevaEtiqueta();
-            String temp = gen.nuevoTemporal();
-            gen.emitirOperacionBinaria(temp, selector, "==", caso.literalCaso().getText());
-            gen.emitirSaltoSiFalso(temp, etiquetaSiguiente);
-            for (SentenciaContext sentencia : caso.sentencia()) {
+        // Como en Java: un caso sin "break" sigue con el cuerpo del
+        // siguiente (fall-through). Primero se prueban las comparaciones
+        // en orden; cada una salta a la etiqueta de su cuerpo.
+        List<CasoSwitchContext> casos = ctx.casoSwitch();
+        List<String> etiquetasCuerpo = new ArrayList<>();
+        for (CasoSwitchContext caso : casos) {
+            String etiquetaCuerpo = gen.nuevaEtiqueta();
+            etiquetasCuerpo.add(etiquetaCuerpo);
+            Lugar comparacion = gen.nuevoTemporal(Tipo.booleano());
+            gen.emitirOperacionBinaria(comparacion, selector, "==",
+                    new LiteralLugar(caso.literalCaso().getText()), tipoSelector, tipoLiteralCaso(caso.literalCaso()));
+            gen.emitirSaltoSiVerdadero(comparacion, etiquetaCuerpo);
+        }
+        String etiquetaDefault = (ctx.casoDefault() != null) ? gen.nuevaEtiqueta() : etiquetaFin;
+        gen.emitirSalto(etiquetaDefault);
+
+        pilaControlFlujo.push(new String[]{etiquetaFin, etiquetaFin});
+        ambitos.entrar();
+        for (int i = 0; i < casos.size(); i++) {
+            gen.emitirEtiqueta(etiquetasCuerpo.get(i));
+            for (SentenciaContext sentencia : casos.get(i).sentencia()) {
                 visit(sentencia);
             }
-            gen.emitirEtiqueta(etiquetaSiguiente);
         }
         if (ctx.casoDefault() != null) {
+            gen.emitirEtiqueta(etiquetaDefault);
             for (SentenciaContext sentencia : ctx.casoDefault().sentencia()) {
                 visit(sentencia);
             }
         }
+        ambitos.salir();
         pilaControlFlujo.pop();
         gen.emitirEtiqueta(etiquetaFin);
         return null;
     }
 
+    private Tipo tipoLiteralCaso(LiteralCasoContext ctx) {
+        if (ctx.STRING_LITERAL() != null) return Tipo.cadena();
+        if (ctx.CHAR_LITERAL() != null) return Tipo.caracter();
+        return Tipo.entero();
+    }
+
     @Override
-    public String visitSentenciaBreak(SentenciaBreakContext ctx) {
+    public Lugar visitSentenciaBreak(SentenciaBreakContext ctx) {
         if (!pilaControlFlujo.isEmpty()) {
             gen.emitirSalto(pilaControlFlujo.peek()[1]);
         }
@@ -311,16 +463,24 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
     }
 
     @Override
-    public String visitSentenciaContinue(SentenciaContinueContext ctx) {
-        if (!pilaControlFlujo.isEmpty()) {
-            gen.emitirSalto(pilaControlFlujo.peek()[0]);
+    public Lugar visitSentenciaContinue(SentenciaContinueContext ctx) {
+        // "continue" salta al ciclo mas interno, aunque haya un switch en medio
+        for (String[] destino : pilaControlFlujo) {
+            if (!destino[0].equals(destino[1])) { // en un switch ambos son la etiqueta de fin
+                gen.emitirSalto(destino[0]);
+                break;
+            }
         }
         return null;
     }
 
     @Override
-    public String visitSentenciaReturn(SentenciaReturnContext ctx) {
-        String valor = (ctx.expresion() != null) ? visit(ctx.expresion()) : null;
+    public Lugar visitSentenciaReturn(SentenciaReturnContext ctx) {
+        if (funcionActual.esConstructor()) {
+            gen.emitirRetorno(new NombreLugar("this")); // en C el constructor devuelve el objeto creado
+            return null;
+        }
+        Lugar valor = (ctx.expresion() != null) ? valor(ctx.expresion()) : null;
         gen.emitirRetorno(valor);
         return null;
     }
@@ -330,219 +490,383 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<String> {
     // =====================================================================
 
     @Override
-    public String visitExpEntero(ExpEnteroContext ctx) {
-        return ctx.getText();
+    public Lugar visitExpEntero(ExpEnteroContext ctx) {
+        return new LiteralLugar(ctx.getText());
     }
 
     @Override
-    public String visitExpDecimal(ExpDecimalContext ctx) {
-        return ctx.getText();
+    public Lugar visitExpDecimal(ExpDecimalContext ctx) {
+        return new LiteralLugar(ctx.getText());
     }
 
     @Override
-    public String visitExpCaracter(ExpCaracterContext ctx) {
-        return ctx.getText();
+    public Lugar visitExpCaracter(ExpCaracterContext ctx) {
+        return new LiteralLugar(ctx.getText());
     }
 
     @Override
-    public String visitExpCadena(ExpCadenaContext ctx) {
-        return ctx.getText();
+    public Lugar visitExpCadena(ExpCadenaContext ctx) {
+        return new LiteralLugar(ctx.getText());
     }
 
     @Override
-    public String visitExpVerdadero(ExpVerdaderoContext ctx) {
-        return "1";
+    public Lugar visitExpVerdadero(ExpVerdaderoContext ctx) {
+        return new LiteralLugar("1");
     }
 
     @Override
-    public String visitExpFalso(ExpFalsoContext ctx) {
-        return "0";
+    public Lugar visitExpFalso(ExpFalsoContext ctx) {
+        return new LiteralLugar("0");
     }
 
     @Override
-    public String visitExpNulo(ExpNuloContext ctx) {
-        return "NULL";
+    public Lugar visitExpNulo(ExpNuloContext ctx) {
+        return new LiteralLugar("NULL");
     }
 
     @Override
-    public String visitExpThis(ExpThisContext ctx) {
-        return "this";
+    public Lugar visitExpThis(ExpThisContext ctx) {
+        return new NombreLugar("this");
     }
 
     @Override
-    public String visitExpId(ExpIdContext ctx) {
-        return ctx.ID().getText();
+    public Lugar visitExpId(ExpIdContext ctx) {
+        String nombre = ctx.ID().getText();
+        String local = ambitos.resolver(nombre);
+        if (local != null) {
+            calcularTipo(ctx, ambitos.tipoDe(nombre));
+            return new NombreLugar(local);
+        }
+        // No es local ni parametro: es un campo de esta clase (this->campo)
+        ModeloPrograma.Estructura clase = modelo.buscarEstructura(claseActual);
+        ModeloPrograma.Variable campo = (clase != null) ? clase.buscarCampo(nombre) : null;
+        if (campo != null) {
+            calcularTipo(ctx, campo.getTipo());
+            return new CampoLugar(new NombreLugar("this"), campo.getNombreC());
+        }
+        return new NombreLugar(ModeloPrograma.nombreSeguroC(nombre));
     }
 
     @Override
-    public String visitExpParentesis(ExpParentesisContext ctx) {
-        return visit(ctx.expresion());
+    public Lugar visitExpParentesis(ExpParentesisContext ctx) {
+        Lugar lugar = valor(ctx.expresion());
+        calcularTipo(ctx, tipo(ctx.expresion()));
+        return lugar;
     }
 
     @Override
-    public String visitExpUnario(ExpUnarioContext ctx) {
-        String operando = visit(ctx.expresion());
-        String operador = (ctx.NOT() != null) ? "!" : "-";
-        String temp = gen.nuevoTemporal();
-        gen.emitirOperacionUnaria(temp, operador, operando);
+    public Lugar visitExpUnario(ExpUnarioContext ctx) {
+        Lugar operando = valor(ctx.expresion());
+        boolean negacion = ctx.NOT() != null;
+        calcularTipo(ctx, TablaTipos.resultadoUnario(
+                negacion ? Operador.NEGACION_LOGICA : Operador.MENOS_UNARIO, tipo(ctx.expresion())));
+        Lugar temp = gen.nuevoTemporal(tipo(ctx));
+        gen.emitirOperacionUnaria(temp, negacion ? "!" : "-", operando);
         return temp;
     }
 
     @Override
-    public String visitExpIncDecPrefijo(ExpIncDecPrefijoContext ctx) {
-        String lugar = visit(ctx.expresion());
+    public Lugar visitExpIncDecPrefijo(ExpIncDecPrefijoContext ctx) {
+        Lugar lugar = valor(ctx.expresion());
+        calcularTipo(ctx, tipo(ctx.expresion()));
         String operador = (ctx.INC() != null) ? "+" : "-";
-        gen.emitirOperacionBinaria(lugar, lugar, operador, "1");
-        return lugar; // prefijo: el valor resultante es el YA incrementado
+        gen.emitirOperacionBinaria(lugar, lugar, operador, new LiteralLugar("1"));
+        return lugar;
     }
 
     @Override
-    public String visitExpIncDecSufijo(ExpIncDecSufijoContext ctx) {
-        String lugar = visit(ctx.expresion());
-        String temp = gen.nuevoTemporal();
-        gen.emitirAsignacion(temp, lugar); // guarda el valor viejo
+    public Lugar visitExpIncDecSufijo(ExpIncDecSufijoContext ctx) {
+        Lugar lugar = valor(ctx.expresion());
+        calcularTipo(ctx, tipo(ctx.expresion()));
+        Lugar temp = gen.nuevoTemporal(tipo(ctx));
+        gen.emitirAsignacion(temp, lugar);
         String operador = (ctx.INC() != null) ? "+" : "-";
-        gen.emitirOperacionBinaria(lugar, lugar, operador, "1");
-        return temp; // sufijo: el valor resultante es el ANTERIOR al incremento
-    }
-
-    @Override
-    public String visitExpMultiplicativa(ExpMultiplicativaContext ctx) {
-        String operador = (ctx.STAR() != null) ? "*" : (ctx.SLASH() != null) ? "/" : "%";
-        return emitirBinaria(ctx.expresion(0), operador, ctx.expresion(1));
-    }
-
-    @Override
-    public String visitExpAditiva(ExpAditivaContext ctx) {
-        String operador = (ctx.PLUS() != null) ? "+" : "-";
-        return emitirBinaria(ctx.expresion(0), operador, ctx.expresion(1));
-    }
-
-    @Override
-    public String visitExpRelacional(ExpRelacionalContext ctx) {
-        String operador = (ctx.LT() != null) ? "<" : (ctx.GT() != null) ? ">"
-                : (ctx.LE() != null) ? "<=" : ">=";
-        return emitirBinaria(ctx.expresion(0), operador, ctx.expresion(1));
-    }
-
-    @Override
-    public String visitExpIgualdad(ExpIgualdadContext ctx) {
-        String operador = (ctx.EQ() != null) ? "==" : "!=";
-        return emitirBinaria(ctx.expresion(0), operador, ctx.expresion(1));
-    }
-
-    @Override
-    public String visitExpAnd(ExpAndContext ctx) {
-        return emitirBinaria(ctx.expresion(0), "&&", ctx.expresion(1));
-    }
-
-    @Override
-    public String visitExpOr(ExpOrContext ctx) {
-        return emitirBinaria(ctx.expresion(0), "||", ctx.expresion(1));
-    }
-
-    private String emitirBinaria(ExpresionContext izq, String operador, ExpresionContext der) {
-        String lugarIzq = visit(izq);
-        String lugarDer = visit(der);
-        String temp = gen.nuevoTemporal();
-        gen.emitirOperacionBinaria(temp, lugarIzq, operador, lugarDer);
+        gen.emitirOperacionBinaria(lugar, lugar, operador, new LiteralLugar("1"));
         return temp;
     }
 
     @Override
-    public String visitExpTernario(ExpTernarioContext ctx) {
-        String condicion = visit(ctx.expresion(0));
+    public Lugar visitExpMultiplicativa(ExpMultiplicativaContext ctx) {
+        if (ctx.STAR() != null) return emitirBinaria(ctx, "*", Operador.MULTIPLICACION);
+        if (ctx.SLASH() != null) return emitirBinaria(ctx, "/", Operador.DIVISION);
+        return emitirBinaria(ctx, "%", Operador.MODULO);
+    }
+
+    @Override
+    public Lugar visitExpAditiva(ExpAditivaContext ctx) {
+        return (ctx.PLUS() != null)
+                ? emitirBinaria(ctx, "+", Operador.SUMA)
+                : emitirBinaria(ctx, "-", Operador.RESTA);
+    }
+
+    @Override
+    public Lugar visitExpRelacional(ExpRelacionalContext ctx) {
+        if (ctx.LT() != null) return emitirBinaria(ctx, "<", Operador.MENOR);
+        if (ctx.GT() != null) return emitirBinaria(ctx, ">", Operador.MAYOR);
+        if (ctx.LE() != null) return emitirBinaria(ctx, "<=", Operador.MENOR_IGUAL);
+        return emitirBinaria(ctx, ">=", Operador.MAYOR_IGUAL);
+    }
+
+    @Override
+    public Lugar visitExpIgualdad(ExpIgualdadContext ctx) {
+        return (ctx.EQ() != null)
+                ? emitirBinaria(ctx, "==", Operador.IGUAL)
+                : emitirBinaria(ctx, "!=", Operador.DIFERENTE);
+    }
+
+    @Override
+    public Lugar visitExpAnd(ExpAndContext ctx) {
+        return emitirBinaria(ctx, "&&", Operador.AND);
+    }
+
+    @Override
+    public Lugar visitExpOr(ExpOrContext ctx) {
+        return emitirBinaria(ctx, "||", Operador.OR);
+    }
+
+    /** Todas las binarias tienen la forma "expresion OP expresion": hijos 0 y 1. */
+    private Lugar emitirBinaria(ParserRuleContext ctx, String operador, Operador tipoOperador) {
+        ExpresionContext izq = ctx.getRuleContext(ExpresionContext.class, 0);
+        ExpresionContext der = ctx.getRuleContext(ExpresionContext.class, 1);
+        Lugar lugarIzq = valor(izq);
+        Lugar lugarDer = valor(der);
+        calcularTipo(ctx, TablaTipos.resultadoBinario(tipo(izq), tipoOperador, tipo(der)));
+        Lugar temp = gen.nuevoTemporal(tipo(ctx));
+        gen.emitirOperacionBinaria(temp, lugarIzq, operador, lugarDer, tipo(izq), tipo(der));
+        return temp;
+    }
+
+    @Override
+    public Lugar visitExpTernario(ExpTernarioContext ctx) {
+        Lugar condicion = valor(ctx.expresion(0));
         String etiquetaFalso = gen.nuevaEtiqueta();
         String etiquetaFin = gen.nuevaEtiqueta();
-        String temp = gen.nuevoTemporal();
 
         gen.emitirSaltoSiFalso(condicion, etiquetaFalso);
-        gen.emitirAsignacion(temp, visit(ctx.expresion(1)));
+        Lugar siVerdadero = valor(ctx.expresion(1));
+        calcularTipo(ctx, tipo(ctx.expresion(1)));
+        Lugar temp = gen.nuevoTemporal(tipo(ctx));
+        gen.emitirAsignacion(temp, siVerdadero);
         gen.emitirSalto(etiquetaFin);
         gen.emitirEtiqueta(etiquetaFalso);
-        gen.emitirAsignacion(temp, visit(ctx.expresion(2)));
+        gen.emitirAsignacion(temp, valor(ctx.expresion(2)));
         gen.emitirEtiqueta(etiquetaFin);
 
         return temp;
     }
 
     @Override
-    public String visitExpIndice(ExpIndiceContext ctx) {
-        String base = visit(ctx.expresion(0));
-        String indice = visit(ctx.expresion(1));
-        return base + "[" + indice + "]";
+    public Lugar visitExpIndice(ExpIndiceContext ctx) {
+        Lugar base = valor(ctx.expresion(0));
+        Lugar indice = valor(ctx.expresion(1));
+        calcularTipo(ctx, tipo(ctx.expresion(0)).tipoElemento());
+        return new IndiceLugar(base, indice);
     }
 
     @Override
-    public String visitExpAcceso(ExpAccesoContext ctx) {
-        String base = visit(ctx.expresion());
-        return base + "." + ctx.ID().getText();
+    public Lugar visitExpAcceso(ExpAccesoContext ctx) {
+        Lugar base = valor(ctx.expresion());
+        Tipo tipoBase = tipo(ctx.expresion());
+        String nombreCampo = ctx.ID().getText();
+        if (tipoBase.esEstructura() && !tipoBase.esArreglo()) {
+            return lugarCampo(base, tipoBase.getNombreEstructura(), nombreCampo, ctx);
+        }
+        return new CampoLugar(base, nombreCampo);
+    }
+
+    private Lugar lugarCampo(Lugar base, String clase, String nombreCampo) {
+        return lugarCampo(base, clase, nombreCampo, null);
+    }
+
+    private Lugar lugarCampo(Lugar base, String clase, String nombreCampo, ParserRuleContext ctx) {
+        ModeloPrograma.Estructura estructura = modelo.buscarEstructura(clase);
+        ModeloPrograma.Variable campo = (estructura != null) ? estructura.buscarCampo(nombreCampo) : null;
+        if (campo == null) {
+            if (ctx != null) {
+                error("La clase '" + clase + "' no tiene el atributo '" + nombreCampo + "'", ctx);
+            }
+            return new CampoLugar(base, nombreCampo);
+        }
+        if (ctx != null) {
+            calcularTipo(ctx, campo.getTipo());
+        }
+        return new CampoLugar(base, campo.getNombreC());
     }
 
     @Override
-    public String visitExpLlamadaMetodo(ExpLlamadaMetodoContext ctx) {
-        String objetivo = visit(ctx.expresion());
-        List<String> argumentos = evaluarArgumentos(ctx.argumentos());
-        String temp = gen.nuevoTemporal();
-        gen.emitirLlamada(temp, objetivo, ctx.ID().getText(), argumentos);
+    public Lugar visitExpLlamadaLocal(ExpLlamadaLocalContext ctx) {
+        // metodo() dentro de la clase = this.metodo()
+        List<Lugar> argumentos = evaluarArgumentos(ctx.argumentos());
+        return emitirLlamadaMetodo(ctx, new NombreLugar("this"), claseActual, ctx.ID().getText(), argumentos);
+    }
+
+    @Override
+    public Lugar visitExpLlamadaMetodo(ExpLlamadaMetodoContext ctx) {
+        Lugar objetivo = valor(ctx.expresion());
+        Tipo tipoObjetivo = tipo(ctx.expresion());
+        List<Lugar> argumentos = evaluarArgumentos(ctx.argumentos());
+        if (!tipoObjetivo.esEstructura() || tipoObjetivo.esArreglo()) {
+            error("Solo se puede llamar un metodo sobre un objeto, no sobre " + tipoObjetivo, ctx);
+            return new LiteralLugar("0");
+        }
+        return emitirLlamadaMetodo(ctx, objetivo, tipoObjetivo.getNombreEstructura(), ctx.ID().getText(), argumentos);
+    }
+
+    private Lugar emitirLlamadaMetodo(ParserRuleContext ctx, Lugar objetivo, String clase, String nombre,
+                                      List<Lugar> argumentos) {
+        ModeloPrograma.Funcion metodo = modelo.buscarMetodo(clase, nombre, argumentos.size());
+        if (metodo == null) {
+            error("No existe el metodo '" + nombre + "' con " + argumentos.size()
+                    + " argumento(s) en la clase '" + clase + "'", ctx);
+            return new LiteralLugar("0");
+        }
+        calcularTipo(ctx, metodo.getRetorno());
+        Lugar destino = metodo.getRetorno().esVacio() ? null : gen.nuevoTemporal(metodo.getRetorno());
+        gen.emitirLlamada(destino, objetivo, nombre, metodo.getNombreC(), argumentos);
+        return destino;
+    }
+
+    @Override
+    public Lugar visitExpNuevoObjeto(ExpNuevoObjetoContext ctx) {
+        String clase = ctx.ID().getText();
+        List<Lugar> argumentos = evaluarArgumentos(ctx.argumentos());
+        ModeloPrograma.Funcion constructor = modelo.buscarConstructor(clase, argumentos.size());
+        if (constructor == null) {
+            error("No existe un constructor de '" + clase + "' con " + argumentos.size() + " argumento(s)", ctx);
+            return new LiteralLugar("NULL");
+        }
+        calcularTipo(ctx, Tipo.estructura(clase));
+        Lugar temp = gen.nuevoTemporal(Tipo.estructura(clase));
+        gen.emitirLlamada(temp, null, "new " + clase, constructor.getNombreC(), argumentos);
         return temp;
     }
 
-    @Override
-    public String visitExpNuevoObjeto(ExpNuevoObjetoContext ctx) {
-        List<String> argumentos = evaluarArgumentos(ctx.argumentos());
-        String temp = gen.nuevoTemporal();
-        gen.emitirLlamada(temp, null, "new_" + ctx.ID().getText(), argumentos);
-        return temp;
+    private List<Lugar> evaluarArgumentos(ArgumentosContext ctx) {
+        List<Lugar> lugares = new ArrayList<>();
+        if (ctx != null) {
+            for (ExpresionContext argumento : ctx.expresion()) {
+                lugares.add(valor(argumento));
+            }
+        }
+        return lugares;
     }
 
     @Override
-    public String visitExpNuevoArreglo(ExpNuevoArregloContext ctx) {
-        // Simplificacion de hoy: solo se deja una cuarteta simbolica con
-        // las dimensiones evaluadas; la reserva de memoria real en C se
-        // resuelve en comun.codegen (manana).
-        List<String> dimensiones = new ArrayList<>();
+    public Lugar visitExpNuevoArreglo(ExpNuevoArregloContext ctx) {
+        List<Lugar> argumentos = new ArrayList<>();
+        Tipo base = resolverTipoPrimitivo(ctx.tipoPrimitivo());
+        argumentos.add(new LiteralLugar(String.valueOf(ctx.expresion().size())));
+        argumentos.add(new LiteralLugar("sizeof(" + RuntimeC.tipoC(base) + ")"));
         for (ExpresionContext dimension : ctx.expresion()) {
-            dimensiones.add(visit(dimension));
+            argumentos.add(valor(dimension));
         }
-        String temp = gen.nuevoTemporal();
-        gen.emitirLlamada(temp, null, "new_arreglo_" + ctx.tipoPrimitivo().getText(), dimensiones);
+        Tipo tipoArreglo = Tipo.arregloDe(base, ctx.expresion().size());
+        calcularTipo(ctx, tipoArreglo);
+        Lugar temp = gen.nuevoTemporal(tipoArreglo);
+        gen.emitirLlamada(temp, null, "new " + base + "[]", "zc_nuevo_arreglo", argumentos);
         return temp;
     }
 
     @Override
-    public String visitExpArregloLiteral(ExpArregloLiteralContext ctx) {
-        // TODO (pendiente, no hoy): emitir las asignaciones elemento por
-        // elemento (t[0] = ..., t[1] = ..., etc, recursivo para literales
-        // anidados). Por ahora solo evaluamos los elementos, para que sus
-        // propias cuartetas (si tienen efectos, como una llamada) queden
-        // emitidas, y devolvemos un temporal simbolico.
-        for (ExpresionContext elemento : ctx.expresion()) {
-            visit(elemento);
+    public Lugar visitExpArregloLiteral(ExpArregloLiteralContext ctx) {
+        // {a, b, c}: se reserva un arreglo de 3 y se asigna elemento por elemento
+        Tipo tipoArreglo = tipo(ctx);
+        if (!tipoArreglo.esArreglo()) {
+            Tipo elemento = ctx.expresion().isEmpty() ? Tipo.entero() : tipo(ctx.expresion(0));
+            tipoArreglo = Tipo.arregloDe(elemento.esError() ? Tipo.entero() : elemento);
         }
-        return gen.nuevoTemporal();
+        Tipo elemento = tipoArreglo.tipoElemento();
+        List<Lugar> valores = new ArrayList<>();
+        for (ExpresionContext expresion : ctx.expresion()) {
+            valores.add(valor(expresion));
+        }
+        Lugar temp = gen.nuevoTemporal(tipoArreglo);
+        gen.emitirLlamada(temp, null, "new " + elemento + "[]", "zc_nuevo_arreglo", List.of(
+                new LiteralLugar("1"),
+                new LiteralLugar("sizeof(" + RuntimeC.tipoC(elemento) + ")"),
+                new LiteralLugar(String.valueOf(valores.size()))));
+        for (int i = 0; i < valores.size(); i++) {
+            gen.emitirAsignacion(new IndiceLugar(temp, new LiteralLugar(String.valueOf(i))), valores.get(i));
+        }
+        return temp;
     }
 
     @Override
-    public String visitExpLlamadaPrintln(ExpLlamadaPrintlnContext ctx) {
+    public Lugar visitExpLlamadaPrintln(ExpLlamadaPrintlnContext ctx) {
         if (ctx.expresion() != null) {
-            gen.emitirImprimir(visit(ctx.expresion()));
+            Lugar valor = valor(ctx.expresion());
+            gen.emitirImprimir(valor, RuntimeC.formatoImpresion(tipo(ctx.expresion())), true);
+        } else {
+            gen.emitirImprimir(new LiteralLugar("\"\""), "%s", true);
         }
         return null;
     }
 
     @Override
-    public String visitExpLlamadaPrint(ExpLlamadaPrintContext ctx) {
+    public Lugar visitExpLlamadaPrint(ExpLlamadaPrintContext ctx) {
         if (ctx.expresion() != null) {
-            gen.emitirImprimir(visit(ctx.expresion()));
+            Lugar valor = valor(ctx.expresion());
+            gen.emitirImprimir(valor, RuntimeC.formatoImpresion(tipo(ctx.expresion())), false);
         }
         return null;
     }
 
     @Override
-    public String visitExpLlamadaReadln(ExpLlamadaReadlnContext ctx) {
-        String temp = gen.nuevoTemporal();
-        gen.emitirLeer(temp);
+    public Lugar visitExpLlamadaReadln(ExpLlamadaReadlnContext ctx) {
+        calcularTipo(ctx, Tipo.cadena());
+        Lugar temp = gen.nuevoTemporal(Tipo.cadena());
+        gen.emitirLeer(temp, Tipo.cadena());
         return temp;
+    }
+
+    // =====================================================================
+    // Utilidades
+    // =====================================================================
+
+    /** Visita una expresion que DEBE producir valor (nunca devuelve null). */
+    private Lugar valor(ExpresionContext ctx) {
+        Lugar lugar = visit(ctx);
+        return (lugar != null) ? lugar : new LiteralLugar("0");
+    }
+
+    /**
+     * Tipo de una expresion: el que calculo este generador (con todas
+     * las clases a la vista) o, si no, el del semantico.
+     */
+    private Tipo tipo(ParseTree ctx) {
+        Tipo calculado = tiposCalculados.get(ctx);
+        if (calculado != null) {
+            return calculado;
+        }
+        Tipo semantico = tiposSemantico.get(ctx);
+        return (semantico != null) ? semantico : Tipo.error();
+    }
+
+    /** Guarda el tipo calculado aqui solo si el semantico no pudo resolverlo. */
+    private void calcularTipo(ParseTree ctx, Tipo calculado) {
+        Tipo semantico = tiposSemantico.get(ctx);
+        if ((semantico == null || semantico.esError()) && calculado != null) {
+            tiposCalculados.put(ctx, calculado);
+        }
+    }
+
+    private Tipo resolverTipo(TipoContext ctx, int corchetes) {
+        Tipo base = (ctx.tipoPrimitivo() != null)
+                ? resolverTipoPrimitivo(ctx.tipoPrimitivo())
+                : Tipo.estructura(ctx.ID().getText());
+        return corchetes > 0 ? Tipo.arregloDe(base, corchetes) : base;
+    }
+
+    private Tipo resolverTipoPrimitivo(TipoPrimitivoContext ctx) {
+        if (ctx.KW_INT() != null) return Tipo.entero();
+        if (ctx.KW_DOUBLE() != null) return Tipo.decimal();
+        if (ctx.KW_CHAR() != null) return Tipo.caracter();
+        if (ctx.KW_BOOLEAN() != null) return Tipo.booleano();
+        return Tipo.cadena(); // KW_STRING
+    }
+
+    private void error(String mensaje, ParserRuleContext ctx) {
+        errores.agregar(TipoError.SEMANTICO, mensaje, ctx.getStart().getLine(),
+                ctx.getStart().getCharPositionInLine(), nombreArchivo);
     }
 }

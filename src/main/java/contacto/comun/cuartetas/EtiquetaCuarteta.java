@@ -15,6 +15,11 @@ public class EtiquetaCuarteta extends Cuarteta {
     }
 
     @Override
+    public void generarC(StringBuilder codigo) {
+        codigo.append(nombre).append(":;\n"); // ";" vacio: en C una etiqueta no puede ir sola antes de "}"
+    }
+
+    @Override
     public String toString() {
         return getNumero() + ": " + nombre + ":";
     }
