@@ -376,6 +376,6 @@ CARACTER
 
 ID : [a-zA-Z_] [a-zA-Z_0-9]* ;
 
-COMENTARIO_BLOQUE : '##' .*? '##' -> skip ;
-COMENTARIO_LINEA  : '//' ~[\r\n]* -> skip ;
+COMENTARIO_BLOQUE : '##' .*? '##' -> channel(HIDDEN) ;
+COMENTARIO_LINEA  : '//' ~[\r\n]* -> channel(HIDDEN) ;
 ESPACIOS          : [ \t\r\n]+ -> skip ;
