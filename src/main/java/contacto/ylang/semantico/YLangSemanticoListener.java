@@ -73,6 +73,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
     // declarada mas abajo).
     // =====================================================================
 
+    // Pre-registra la firma de todas las funciones antes de revisar sus cuerpos
     @Override
     public void enterSeccionFunciones(SeccionFuncionesContext ctx) {
         for (FuncionDefContext funcion : ctx.funcionDef()) {
@@ -89,6 +90,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // Pre-registra todas las estructuras antes de revisar nada
     @Override
     public void enterSeccionEstructuras(SeccionEstructurasContext ctx) {
         for (EstructuraContext estructura : ctx.estructura()) {
@@ -102,6 +104,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // Declara la estructura si es local a una funcion, y revisa que no repita campos
     @Override
     public void exitEstructura(EstructuraContext ctx) {
         String nombre = ctx.ID().getText();
@@ -133,6 +136,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
     // Funciones
     // =====================================================================
 
+    // Abre el ambito de la funcion con sus parametros y recuerda su tipo de retorno
     @Override
     public void enterFuncionDef(FuncionDefContext ctx) {
         Tipo tipoRetorno = (ctx.ARROW() != null) ? resolverTipo(ctx.tipo(), 0) : Tipo.vacio();
@@ -152,6 +156,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipoRetornoActual = tipoRetorno;
     }
 
+    // Cierra el ambito de la funcion
     @Override
     public void exitFuncionDef(FuncionDefContext ctx) {
         tabla.salirAmbito();
@@ -162,18 +167,21 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
     // Sentencias
     // =====================================================================
 
+    // tipo x = valor
     @Override
     public void exitDeclaracionVariable(DeclaracionVariableContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo(), corchetesLista(ctx.LBRACKET()));
         declararVariable(ctx.ID().getText(), tipo, ctx.expresion(), ctx);
     }
 
+    // La variable del "para"
     @Override
     public void exitDeclaracionParaInit(DeclaracionParaInitContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo(), 0);
         declararVariable(ctx.ID().getText(), tipo, ctx.expresion(), ctx);
     }
 
+    // Valida el valor inicial y declara la variable (error si ya existe en el ambito)
     private void declararVariable(String nombre, Tipo tipo, ExpresionContext inicializador, ParserRuleContext nodo) {
         if (inicializador != null) {
             validarInicializador(inicializador, tipo, nodo);
@@ -184,6 +192,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // Asignacion: destino valido y tipos compatibles ({..} se valida aparte)
     @Override
     public void exitSentenciaExpresion(SentenciaExpresionContext ctx) {
         List<ExpresionContext> expresiones = ctx.expresion();
@@ -209,24 +218,28 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // Se puede asignar a una variable, a un campo o a un elemento de arreglo
     private boolean esDestinoValido(ExpresionContext ctx) {
         return ctx instanceof ExpIdContext
                 || ctx instanceof ExpAccesoContext
                 || ctx instanceof ExpIndiceContext;
     }
 
+    // Abre el ambito del para; dentro valen romper y continuar
     @Override
     public void enterSentenciaPara(SentenciaParaContext ctx) {
         tabla.entrarAmbito("para");
         profundidadCiclo++;
     }
 
+    // Cierra el ambito del para
     @Override
     public void exitSentenciaPara(SentenciaParaContext ctx) {
         profundidadCiclo--;
         tabla.salirAmbito();
     }
 
+    // Dentro del mientras valen romper y continuar
     @Override
     public void enterSentenciaMientras(SentenciaMientrasContext ctx) {
         profundidadCiclo++;
@@ -237,6 +250,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         profundidadCiclo--;
     }
 
+    // Dentro del hacer-mientras valen romper y continuar
     @Override
     public void enterSentenciaHacerMientras(SentenciaHacerMientrasContext ctx) {
         profundidadCiclo++;
@@ -247,6 +261,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         profundidadCiclo--;
     }
 
+    // romper solo dentro de un ciclo o elegir
     @Override
     public void exitSentenciaRomper(SentenciaRomperContext ctx) {
         if (profundidadCiclo == 0 && profundidadElegir == 0) {
@@ -254,6 +269,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // continuar solo dentro de un ciclo
     @Override
     public void exitSentenciaContinuar(SentenciaContinuarContext ctx) {
         if (profundidadCiclo == 0) {
@@ -261,6 +277,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // retornar debe coincidir con el tipo de la funcion (sin "-> tipo" no retorna valor)
     @Override
     public void exitSentenciaRetornar(SentenciaRetornarContext ctx) {
         if (tipoRetornoActual == null) {
@@ -286,6 +303,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // Cada condicion del si / sino debe ser booleana
     @Override
     public void exitSentenciaSi(SentenciaSiContext ctx) {
         for (ExpresionContext condicion : ctx.expresion()) {
@@ -293,11 +311,13 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // Dentro del elegir vale romper (continuar no)
     @Override
     public void enterSentenciaElegir(SentenciaElegirContext ctx) {
         profundidadElegir++;
     }
 
+    // El valor del elegir debe ser simple (no arreglo ni estructura)
     @Override
     public void exitSentenciaElegir(SentenciaElegirContext ctx) {
         profundidadElegir--;
@@ -307,6 +327,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // Una condicion debe ser booleana
     private void verificarCondicion(ExpresionContext ctx) {
         Tipo tipo = tipoDe(ctx);
         if (!TablaTipos.esCondicionValida(tipo)) {
@@ -348,6 +369,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipos.put(ctx, Tipo.booleano());
     }
 
+    // Tipo de una variable: se busca en la tabla (error si no existe o si es una funcion)
     @Override
     public void exitExpId(ExpIdContext ctx) {
         String nombre = ctx.ID().getText();
@@ -365,11 +387,13 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // (x) tiene el tipo de x
     @Override
     public void exitExpParentesis(ExpParentesisContext ctx) {
         tipos.put(ctx, tipoDe(ctx.expresion()));
     }
 
+    // -x / !x: tipo segun TablaTipos, error si no aplica
     @Override
     public void exitExpUnario(ExpUnarioContext ctx) {
         Tipo operando = tipoDe(ctx.expresion());
@@ -381,18 +405,21 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // ++x / --x
     @Override
     public void exitExpIncDecPrefijo(ExpIncDecPrefijoContext ctx) {
         validarIncDec(ctx.expresion(), ctx);
         tipos.put(ctx, tipoDe(ctx.expresion()));
     }
 
+    // x++ / x--
     @Override
     public void exitExpIncDecSufijo(ExpIncDecSufijoContext ctx) {
         validarIncDec(ctx.expresion(), ctx);
         tipos.put(ctx, tipoDe(ctx.expresion()));
     }
 
+    // ++/-- solo sobre algo asignable (variable, campo, arreglo[i]) y numerico
     private void validarIncDec(ExpresionContext operando, ParserRuleContext nodo) {
         if (!esDestinoValido(operando)) {
             error("++ / -- solo se puede aplicar a una variable o un elemento de arreglo", nodo);
@@ -404,40 +431,48 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // * /
     @Override
     public void exitExpMultiplicativa(ExpMultiplicativaContext ctx) {
         Operador operador = (ctx.STAR() != null) ? Operador.MULTIPLICACION : Operador.DIVISION;
         resolverBinaria(ctx, ctx.expresion(0), operador, ctx.expresion(1));
     }
 
+    // + - (+ con una cadena es concatenacion)
     @Override
     public void exitExpAditiva(ExpAditivaContext ctx) {
         Operador operador = (ctx.PLUS() != null) ? Operador.SUMA : Operador.RESTA;
         resolverBinaria(ctx, ctx.expresion(0), operador, ctx.expresion(1));
     }
 
+    // < >
     @Override
     public void exitExpRelacional(ExpRelacionalContext ctx) {
         Operador operador = (ctx.LT() != null) ? Operador.MENOR : Operador.MAYOR;
         resolverBinaria(ctx, ctx.expresion(0), operador, ctx.expresion(1));
     }
 
+    // == !=
     @Override
     public void exitExpIgualdad(ExpIgualdadContext ctx) {
         Operador operador = (ctx.EQ() != null) ? Operador.IGUAL : Operador.DIFERENTE;
         resolverBinaria(ctx, ctx.expresion(0), operador, ctx.expresion(1));
     }
 
+    // &&
     @Override
     public void exitExpAnd(ExpAndContext ctx) {
         resolverBinaria(ctx, ctx.expresion(0), Operador.AND, ctx.expresion(1));
     }
 
+    // ||
     @Override
     public void exitExpOr(ExpOrContext ctx) {
         resolverBinaria(ctx, ctx.expresion(0), Operador.OR, ctx.expresion(1));
     }
 
+    // Tipo de "izq op der" segun TablaTipos; reporta error si no es valida
+    // (sin repetir errores si un lado ya venia con error)
     private void resolverBinaria(ParserRuleContext nodo, ExpresionContext izq, Operador operador, ExpresionContext der) {
         Tipo tipoIzq = tipoDe(izq);
         Tipo tipoDer = tipoDe(der);
@@ -448,6 +483,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipos.put(nodo, resultado);
     }
 
+    // arreglo[i]: el indice debe ser numerico y la base un arreglo
     @Override
     public void exitExpIndice(ExpIndiceContext ctx) {
         Tipo base = tipoDe(ctx.expresion(0));
@@ -467,6 +503,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // estructura.campo: tipo del campo
     @Override
     public void exitExpAcceso(ExpAccesoContext ctx) {
         Tipo base = tipoDe(ctx.expresion());
@@ -483,6 +520,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // Busca el campo en la definicion de la estructura; error si no existe
     private Tipo tipoDeCampo(String nombreEstructura, String nombreCampo, ParserRuleContext nodo) {
         Simbolo estructura = tabla.buscarTipoDefinido(nombreEstructura);
         if (estructura == null || !(estructura.getNodoDefinicion() instanceof EstructuraContext)) {
@@ -499,6 +537,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         return Tipo.error();
     }
 
+    // funcion(args): debe existir con esa cantidad de argumentos; tipo = su retorno
     @Override
     public void exitExpLlamadaFuncion(ExpLlamadaFuncionContext ctx) {
         String nombre = ctx.ID().getText();
@@ -517,6 +556,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // Cada argumento debe ser asignable al tipo de su parametro
     private void validarArgumentos(ArgumentosContext argumentos, FuncionDefContext definicion, ParserRuleContext nodo) {
         if (definicion.parametros() == null) {
             return;
@@ -533,6 +573,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // imprimir(x): no se puede imprimir un arreglo o estructura completa
     @Override
     public void exitExpImprimir(ExpImprimirContext ctx) {
         if (ctx.expresion() != null) {
@@ -544,6 +585,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         tipos.put(ctx, Tipo.vacio());
     }
 
+    // leer() devuelve una cadena
     @Override
     public void exitExpLeer(ExpLeerContext ctx) {
         tipos.put(ctx, Tipo.cadena());
@@ -561,6 +603,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
     // posicional ({10, 20, 85.5}, en el orden en que se declararon los campos)
     // =====================================================================
 
+    // El valor inicial debe ser asignable al tipo declarado ({..} se valida aparte)
     private void validarInicializador(ExpresionContext valor, Tipo tipoEsperado, ParserRuleContext nodo) {
         if (valor instanceof ExpLiteralCompuestoContext) {
             validarLiteralCompuesto((ExpLiteralCompuestoContext) valor, tipoEsperado, nodo);
@@ -572,6 +615,8 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         }
     }
 
+    // {..} para una estructura: un valor por campo, en orden;
+    // para un arreglo: cada elemento del tipo del arreglo
     private void validarLiteralCompuesto(ExpLiteralCompuestoContext literal, Tipo tipoEsperado, ParserRuleContext nodo) {
         List<ExpresionContext> elementos = literal.expresion();
 
@@ -609,6 +654,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
     // Utilidades
     // =====================================================================
 
+    // Tipo escrito en el codigo (entero, Persona, entero[]...)
     private Tipo resolverTipo(TipoContext ctx, int corchetesExtra) {
         Tipo base;
         int corchetesPropios = ctx.LBRACKET().size();
@@ -621,6 +667,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         return total > 0 ? Tipo.arregloDe(base, total) : base;
     }
 
+    // entero/flotante/caracter/cadena/bool -> tipo comun del compilador
     private Tipo resolverTipoPrimitivo(TipoPrimitivoContext ctx) {
         if (ctx.KW_ENTERO() != null) return Tipo.entero();
         if (ctx.KW_FLOTANTE() != null) return Tipo.decimal();
@@ -637,6 +684,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         return corchete != null ? 1 : 0;
     }
 
+    // Clave en la tabla para permitir sobrecarga por cantidad de parametros: nombre#aridad
     private String claveSobrecarga(String nombre, int aridad) {
         return nombre + "#" + aridad;
     }
@@ -654,6 +702,7 @@ public class YLangSemanticoListener extends YLangParserBaseListener {
         return ctx.getStart().getCharPositionInLine();
     }
 
+    // Registra un error semantico con archivo, linea y columna
     private void error(String mensaje, ParserRuleContext ctx) {
         errores.agregar(TipoError.SEMANTICO, mensaje, linea(ctx), columna(ctx), nombreArchivo);
     }

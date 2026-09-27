@@ -21,6 +21,7 @@ public class ImprimirCuarteta extends Cuarteta {
         return valor;
     }
 
+    // printf(formato, valor); los decimales pasan por zc_decimal_a_cadena
     @Override
     public void generarC(StringBuilder codigo) {
         boolean esDecimal = RuntimeC.FORMATO_DECIMAL.equals(formatoC);

@@ -37,6 +37,7 @@ public final class GeneradorCodigoC {
     private GeneradorCodigoC() {
     }
 
+    // Arma el .c completo: runtime, structs, prototipos, funciones y main
     public static String generar(String nombrePrograma, ModeloPrograma modelo) {
         StringBuilder codigo = new StringBuilder();
         codigo.append("// Generado automaticamente a partir de ").append(nombrePrograma).append("\n");
@@ -63,6 +64,7 @@ public final class GeneradorCodigoC {
         return codigo.toString();
     }
 
+    // typedef + struct de cada clase/estructura, con sus campos
     private static void declararEstructuras(StringBuilder codigo, ModeloPrograma modelo) {
         boolean hayEstructuras = false;
         for (ModeloPrograma.Estructura estructura : modelo.getEstructuras()) {
@@ -93,6 +95,8 @@ public final class GeneradorCodigoC {
         }
     }
 
+    // Firma en C de una funcion: "int Pila_desapilar(Pila* this)"
+    // Los metodos reciben el objeto como primer parametro; los constructores lo devuelven
     private static String firma(ModeloPrograma.Funcion funcion) {
         StringBuilder sb = new StringBuilder();
         if (funcion.esMain()) {
@@ -122,6 +126,8 @@ public final class GeneradorCodigoC {
         return sb.append(')').toString();
     }
 
+    // Cuerpo de una funcion: reserva/verificacion de this, locales y temporales
+    // en 0, las cuartetas de su rango, y el return final si hace falta
     private static void definirFuncion(StringBuilder codigo, ModeloPrograma.Funcion funcion) {
         codigo.append(firma(funcion)).append(" {\n");
 
@@ -172,6 +178,7 @@ public final class GeneradorCodigoC {
         codigo.append("}\n\n");
     }
 
+    // Etiquetas a las que salta algun goto (las demas se emiten como comentario)
     private static Set<String> etiquetasDestino(List<Cuarteta> cuerpo) {
         Set<String> destinos = new HashSet<>();
         for (Cuarteta cuarteta : cuerpo) {

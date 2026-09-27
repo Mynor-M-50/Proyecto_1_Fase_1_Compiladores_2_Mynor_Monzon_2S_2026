@@ -28,14 +28,17 @@ public class TablaSimbolos {
     // se pierden apenas se hace salirAmbito()).
     private final List<Simbolo> historial = new ArrayList<>();
 
+    // Arranca con el ambito global ya abierto
     public TablaSimbolos() {
         pila.push(new Ambito("global", null));
     }
 
+    // Abre un ambito hijo del actual
     public void entrarAmbito(String nombre) {
         pila.push(new Ambito(nombre, pila.peek()));
     }
 
+    // Cierra el ambito actual; el global nunca se cierra
     public void salirAmbito() {
         if (pila.size() > 1) {
             pila.pop();
@@ -46,6 +49,7 @@ public class TablaSimbolos {
         return pila.peek();
     }
 
+    // Declara en el ambito actual; false si el nombre ya existia ahi (redeclaracion)
     public boolean declarar(Simbolo simbolo) {
         boolean exito = pila.peek().declarar(simbolo);
         if (exito) {
@@ -58,10 +62,12 @@ public class TablaSimbolos {
         return historial;
     }
 
+    // Busca desde el ambito actual hacia afuera, hasta el global
     public Simbolo buscar(String nombre) {
         return pila.peek().buscar(nombre);
     }
 
+    // Busca solo en el ambito actual
     public Simbolo buscarEnAmbitoActual(String nombre) {
         return pila.peek().buscarLocal(nombre);
     }

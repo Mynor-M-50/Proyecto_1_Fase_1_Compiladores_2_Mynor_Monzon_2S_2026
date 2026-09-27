@@ -35,6 +35,7 @@ public class VentanaPrincipal extends JFrame {
     private final Map<Path, PanelEditor> editoresAbiertos = new HashMap<>();
     private final Map<PanelEditor, javax.swing.JLabel> etiquetasPestana = new HashMap<>();
 
+    // Arma la ventana: arbol a la izquierda, editor al centro y salida abajo
     public VentanaPrincipal(Path carpetaProyecto) {
         super("Proyecto 1 - Compiladores 2 (Y? / Zetariano / Pig Latin)");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -60,6 +61,7 @@ public class VentanaPrincipal extends JFrame {
     // Menu y barra de herramientas
     // =====================================================================
 
+    // Menu Archivo: abrir carpeta, guardar, guardar como y salir
     private JMenuBar construirMenu() {
         JMenuBar barra = new JMenuBar();
 
@@ -76,6 +78,7 @@ public class VentanaPrincipal extends JFrame {
         return barra;
     }
 
+    // Barra con el boton Compilar
     private JToolBar construirBarraHerramientas() {
         JToolBar barra = new JToolBar();
         barra.setFloatable(false);
@@ -87,6 +90,7 @@ public class VentanaPrincipal extends JFrame {
         return barra;
     }
 
+    // Crea un item de menu con su atajo de teclado (opcional) y su accion
     private JMenuItem accion(String texto, KeyStroke atajo, java.awt.event.ActionListener accion) {
         JMenuItem item = new JMenuItem(texto);
         if (atajo != null) {
@@ -100,6 +104,7 @@ public class VentanaPrincipal extends JFrame {
     // Archivos
     // =====================================================================
 
+    // Elige otra carpeta de trabajo para el arbol
     private void abrirCarpeta() {
         JFileChooser selector = new JFileChooser(arbolArchivos.getRaiz().toFile());
         selector.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -108,6 +113,7 @@ public class VentanaPrincipal extends JFrame {
         }
     }
 
+    // Abre el archivo en una pestana nueva (o activa la suya si ya estaba abierto)
     private void abrirArchivo(Path archivo) {
         if (editoresAbiertos.containsKey(archivo)) {
             pestanasEditor.setSelectedComponent(editoresAbiertos.get(archivo));
@@ -148,6 +154,7 @@ public class VentanaPrincipal extends JFrame {
         return panel;
     }
 
+    // Cierra la pestana; si tiene cambios sin guardar, pregunta antes
     private void cerrarPestana(PanelEditor editor) {
         if (editor.isModificado()) {
             int opcion = JOptionPane.showConfirmDialog(this,
@@ -167,10 +174,12 @@ public class VentanaPrincipal extends JFrame {
         }
     }
 
+    // Editor de la pestana seleccionada, o null si no hay ninguna
     private PanelEditor editorActivo() {
         return (PanelEditor) pestanasEditor.getSelectedComponent();
     }
 
+    // Guarda la pestana activa (si es nueva, pide la ruta)
     private void guardarActivo() {
         PanelEditor editor = editorActivo();
         if (editor == null) {
@@ -189,6 +198,7 @@ public class VentanaPrincipal extends JFrame {
         }
     }
 
+    // Guarda la pestana activa en otra ruta y la sigue editando ahi
     private void guardarComoActivo() {
         PanelEditor editor = editorActivo();
         if (editor == null) {
@@ -212,6 +222,7 @@ public class VentanaPrincipal extends JFrame {
         }
     }
 
+    // Actualiza el titulo de la pestana (nombre + "*" si hay cambios)
     private void actualizarTituloPestana(PanelEditor editor) {
         javax.swing.JLabel etiqueta = etiquetasPestana.get(editor);
         if (etiqueta != null) {
@@ -223,6 +234,7 @@ public class VentanaPrincipal extends JFrame {
     // Compilar
     // =====================================================================
 
+    // Guarda todo lo modificado, compila la pestana activa y refresca el arbol
     private void compilarActivo() {
         PanelEditor editor = editorActivo();
         if (editor == null) {
@@ -242,6 +254,7 @@ public class VentanaPrincipal extends JFrame {
         arbolArchivos.refrescar(); // por si se genero un nuevo .c junto al .pig
     }
 
+    // Guarda cada pestana con cambios pendientes
     private void guardarTodosLosModificados() {
         for (PanelEditor editor : editoresAbiertos.values()) {
             if (editor.isModificado() && editor.getArchivo() != null) {

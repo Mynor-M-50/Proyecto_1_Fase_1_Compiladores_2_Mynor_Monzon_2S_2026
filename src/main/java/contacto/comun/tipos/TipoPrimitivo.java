@@ -26,6 +26,7 @@ public enum TipoPrimitivo {
     VACIO,        // "void" / una funcion o metodo sin retorno
     ERROR;        // comodin: algo ya fallo (o es externo/no verificable), no arrastrar mas errores
 
+    // Entero o decimal
     public boolean esNumerico() {
         return this == ENTERO || this == DECIMAL;
     }

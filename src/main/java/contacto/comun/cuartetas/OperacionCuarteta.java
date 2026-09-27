@@ -59,6 +59,7 @@ public class OperacionCuarteta extends Cuarteta {
         return derecho == null;
     }
 
+    // Casos: unaria, concatenacion de cadenas, comparacion de cadenas, u operacion normal de C
     @Override
     public void generarC(StringBuilder codigo) {
         destino.generarC(codigo);
@@ -89,10 +90,12 @@ public class OperacionCuarteta extends Cuarteta {
         codigo.append(";\n");
     }
 
+    // true si el tipo es una cadena simple (no arreglo de cadenas)
     private static boolean esCadena(Tipo tipo) {
         return tipo != null && !tipo.esArreglo() && tipo.getPrimitivo() == TipoPrimitivo.CADENA;
     }
 
+    // Escribe el valor convertido a char* (zc_entero_a_cadena(x), ...) si no es cadena ya
     private static void generarComoCadena(StringBuilder codigo, Lugar valor, Tipo tipo) {
         String conversion = RuntimeC.conversionACadena(tipo);
         if (conversion == null) {

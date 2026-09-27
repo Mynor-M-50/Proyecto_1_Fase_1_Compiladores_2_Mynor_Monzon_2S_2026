@@ -11,6 +11,7 @@ public class IndiceLugar extends Lugar {
         this.indice = indice;
     }
 
+    // base[indice]
     @Override
     public void generarC(StringBuilder codigo) {
         base.generarC(codigo);

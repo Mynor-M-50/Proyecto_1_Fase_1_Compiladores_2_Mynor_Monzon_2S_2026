@@ -15,14 +15,17 @@ public final class RecolectorErrores {
 
     private final List<ErrorCompilacion> errores = new ArrayList<>();
 
+    // Registra un error nuevo
     public void agregar(TipoError tipo, String mensaje, int linea, int columna, String archivo) {
         errores.add(new ErrorCompilacion(tipo, mensaje, linea, columna, archivo));
     }
 
+    // true si ya hay al menos un error (el orquestador se detiene ahi)
     public boolean tieneErrores() {
         return !errores.isEmpty();
     }
 
+    // true si hay algun error de ese tipo (lexico, sintactico o semantico)
     public boolean tieneErroresDeTipo(TipoError tipo) {
         for (ErrorCompilacion error : errores) {
             if (error.getTipo() == tipo) {
@@ -36,6 +39,7 @@ public final class RecolectorErrores {
         return Collections.unmodifiableList(errores);
     }
 
+    // Borra todos los errores guardados
     public void limpiar() {
         errores.clear();
     }

@@ -43,6 +43,7 @@ public final class ErrorCompilacion {
         return archivo;
     }
 
+    // Formato: [SEMANTICO] archivo:linea:columna - mensaje
     @Override
     public String toString() {
         String ubicacion = (archivo != null && !archivo.isEmpty()) ? archivo + ":" : "";

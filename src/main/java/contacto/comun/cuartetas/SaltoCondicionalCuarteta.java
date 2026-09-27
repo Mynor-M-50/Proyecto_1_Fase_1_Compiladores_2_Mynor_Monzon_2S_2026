@@ -31,6 +31,7 @@ public class SaltoCondicionalCuarteta extends Cuarteta {
         return etiquetaDestino;
     }
 
+    // if (!(condicion)) goto L;  o  if (condicion) goto L;
     @Override
     public void generarC(StringBuilder codigo) {
         codigo.append("if (");

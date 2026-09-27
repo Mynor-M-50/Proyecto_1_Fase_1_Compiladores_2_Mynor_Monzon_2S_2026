@@ -1,31 +1,18 @@
 parser grammar YLangParser;
 
 // ============================================================
-// Parser del lenguaje Y? (Proyecto 1 - Compiladores 2)
-//
-// Confirmado contra un utils.y real que compartio la auxiliar (ver
-// notes/NOTES.md): las funciones SI llevan la palabra clave "definir"
-// antes del nombre, y "%funciones" / "%estructuras" NO llevan ':'
-// despues (van directo a NEWLINE). Ya corregido abajo.
-//
-// SUPUESTOS que siguen sin confirmar:
-//   1. Cada encabezado de bloque que SI abre con ':' (estructura,
-//      funcion, si/sino/contrario, elegir, para, mientras, hacer) lo
-//      hace de forma consistente - esto si esta confirmado para
-//      funciones (definir ...():), falta confirmar para el resto.
-//   2. mientras usa "mientras(cond) hacer:": doble palabra clave antes
-//      del bloque (asi aparece en el documento fuente, sin ejemplo real
-//      todavia que lo confirme).
-//   3. Igual que en Codex Latinus: la gramatica es permisiva a proposito
-//      en el lado izquierdo de una asignacion (se acepta cualquier
-//      "expresion"), y es el analizador semantico el que valida que sea
-//      un lvalue real.
+// Y? (.y): parser. Los bloques van por indentacion; los tokens
+// NEWLINE, INDENT y DEDENT los arma YLangLexerBase.
+// Un .y tiene %estructuras (opcional) y %funciones, y cada funcion
+// empieza con "definir". Lo de "mientras (...) hacer:" y los ':' de
+// cada bloque salen del enunciado, falta probarlos con mas ejemplos.
 // ============================================================
 
 options {
     tokenVocab = YLangLexer;
 }
 
+// archivo .y: estructuras (opcional) y funciones
 programa
     : NEWLINE* seccionEstructuras? seccionFunciones EOF
     ;
@@ -36,35 +23,43 @@ seccionEstructuras
     : SECCION_ESTRUCTURAS NEWLINE estructura+
     ;
 
+// %funciones y la lista de funciones
 seccionFunciones
     : SECCION_FUNCIONES NEWLINE funcionDef+
     ;
 
+// estructura Nombre: con sus campos indentados
 estructura
     : ESTRUCTURA ID COLON NEWLINE INDENT campoEstructura+ DEDENT
     ;
 
+// tipo nombre, o tipo nombre[N] para un arreglo fijo
 campoEstructura
     : tipo ID (LBRACKET ENTERO_LITERAL RBRACKET)? NEWLINE
     ;
 
+// definir nombre(params) -> tipo: (el -> tipo es opcional)
 funcionDef
     : DEFINIR ID LPAREN parametros? RPAREN (ARROW tipo)? COLON NEWLINE INDENT sentencia+ DEDENT
     ;
 
+// lista de parametros separados por coma
 parametros
     : parametro (COMMA parametro)*
     ;
 
+// tipo nombre, con [] si es arreglo
 parametro
     : tipo ID (LBRACKET RBRACKET)?
     ;
 
+// tipo primitivo o nombre de estructura, con [] opcionales
 tipo
     : tipoPrimitivo (LBRACKET RBRACKET)*
     | ID (LBRACKET RBRACKET)*        // tipo estructura, posiblemente anidada
     ;
 
+// entero, flotante, caracter, cadena, bool
 tipoPrimitivo
     : KW_ENTERO | KW_FLOTANTE | KW_CARACTER | KW_CADENA | KW_BOOL
     ;
@@ -84,64 +79,79 @@ sentencia
     | sentenciaContinuar
     ;
 
+// tipo nombre = valor, o tipo nombre[N]
 declaracionVariable
     : tipo (LBRACKET RBRACKET)* ID (LBRACKET ENTERO_LITERAL RBRACKET)* (ASSIGN expresion)? NEWLINE
     ;
 
+// asignacion o expresion suelta (llamada, imprimir, i++)
 sentenciaExpresion
     : expresion (ASSIGN expresion)? NEWLINE
     ;
 
+// si (c) entonces / sino (c) entonces / contrario
 sentenciaSi
     : SI LPAREN expresion RPAREN ENTONCES bloqueIndentado
       (SINO LPAREN expresion RPAREN ENTONCES bloqueIndentado)*
       (CONTRARIO bloqueIndentado)?
     ;
 
+// salto de linea y sentencias con un nivel mas de indentacion
 bloqueIndentado
     : NEWLINE INDENT sentencia+ DEDENT
     ;
 
+// elegir (valor): con sus casos
 sentenciaElegir
     : ELEGIR LPAREN expresion RPAREN COLON NEWLINE INDENT casoElegir* casoSiempre? DEDENT
     ;
 
+// caso valor: bloque
 casoElegir
     : CASO literalCaso COLON bloqueIndentado
     ;
 
+// siempre: bloque (el caso por defecto)
 casoSiempre
     : SIEMPRE COLON bloqueIndentado
     ;
 
+// valores permitidos en un caso
 literalCaso
     : ENTERO_LITERAL | CADENA_LITERAL | CARACTER_LITERAL
     ;
 
+// para (init; condicion; update):
 sentenciaPara
     : PARA LPAREN declaracionParaInit SEMI expresion SEMI expresion RPAREN COLON bloqueIndentado
     ;
 
+// variable del para
 declaracionParaInit
     : tipo ID (ASSIGN expresion)?
     ;
 
+// mientras (condicion) hacer:
 sentenciaMientras
     : MIENTRAS LPAREN expresion RPAREN HACER COLON bloqueIndentado
     ;
 
+// hacer: bloque mientras (condicion)
 sentenciaHacerMientras
     : HACER COLON bloqueIndentado MIENTRAS LPAREN expresion RPAREN
     ;
 
+// retornar con valor opcional
 sentenciaRetornar
     : RETORNAR expresion? NEWLINE
     ;
 
+// romper (break)
 sentenciaRomper
     : ROMPER NEWLINE
     ;
 
+// continuar (continue)
 sentenciaContinuar
     : CONTINUAR NEWLINE
     ;
@@ -173,6 +183,7 @@ expresion
     | FALSO                                                # expFalso
     ;
 
+// argumentos de una llamada
 argumentos
     : expresion (COMMA expresion)*
     ;

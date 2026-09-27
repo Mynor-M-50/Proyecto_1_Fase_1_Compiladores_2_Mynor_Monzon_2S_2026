@@ -46,6 +46,7 @@ public abstract class YLangLexerBase extends Lexer {
         indentStack.push(0);
     }
 
+    // Entrega el siguiente token y recuerda su tipo (lo usa procesarEOF)
     @Override
     public Token nextToken() {
         Token token = siguienteToken();
@@ -53,6 +54,9 @@ public abstract class YLangLexerBase extends Lexer {
         return token;
     }
 
+    // Primero los tokens pendientes; si no, el siguiente del lexer, tratando
+    // parentesis/corchetes (dentro de ellos los saltos de linea no cuentan),
+    // saltos de linea y fin de archivo
     private Token siguienteToken() {
         if (!pendingTokens.isEmpty()) {
             return pendingTokens.poll();
@@ -91,6 +95,8 @@ public abstract class YLangLexerBase extends Lexer {
         return raw;
     }
 
+    // Compara la indentacion de la linea nueva con la pila y emite
+    // NEWLINE, NEWLINE+INDENT o NEWLINE+DEDENT...
     private Token procesarNewline(Token raw) {
         if (_input.LA(1) == IntStream.EOF || esInicioDeComentario()) {
             // Linea en blanco o de puro comentario: no cambia la
@@ -119,6 +125,7 @@ public abstract class YLangLexerBase extends Lexer {
         return newline;
     }
 
+    // Fin de archivo: NEWLINE final si falta, un DEDENT por nivel abierto, y EOF
     private Token procesarEOF(Token raw) {
         // Toda sentencia termina en NEWLINE, pero el NEWLINE_RAW final
         // (si lo hay) se descarta en procesarNewline() y el archivo puede
@@ -138,21 +145,25 @@ public abstract class YLangLexerBase extends Lexer {
         return pendingTokens.poll();
     }
 
+    // true si lo que sigue es // o /*
     private boolean esInicioDeComentario() {
         int c1 = _input.LA(1);
         int c2 = _input.LA(2);
         return c1 == '/' && (c2 == '/' || c2 == '*');
     }
 
+    // Los espacios/tabs despues del ultimo salto: la indentacion de la linea nueva
     private String espaciosFinales(String textoNewlineRaw) {
         int ultimoSalto = Math.max(textoNewlineRaw.lastIndexOf('\n'), textoNewlineRaw.lastIndexOf('\r'));
         return ultimoSalto >= 0 ? textoNewlineRaw.substring(ultimoSalto + 1) : "";
     }
 
+    // Ancho de la indentacion (un tab cuenta como 1)
     private int anchoIndentacion(String espacios) {
         return espacios.length();
     }
 
+    // Token sintetico (NEWLINE/INDENT/DEDENT) en la misma posicion que "modelo"
     private CommonToken fabricarToken(int tipo, Token modelo, String texto) {
         CommonToken t = new CommonToken(modelo);
         t.setType(tipo);

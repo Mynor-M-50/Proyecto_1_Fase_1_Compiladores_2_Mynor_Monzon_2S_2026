@@ -15,6 +15,7 @@ public class PanelSalida extends JPanel {
     private final JTextArea areaCodigoC = crearArea();
     private final JTabbedPane pestanas = new JTabbedPane();
 
+    // Tres pestanas: Errores, Cuartetas y Codigo C
     public PanelSalida() {
         super(new BorderLayout());
         pestanas.addTab("Errores", new JScrollPane(areaErrores));
@@ -23,6 +24,7 @@ public class PanelSalida extends JPanel {
         add(pestanas, BorderLayout.CENTER);
     }
 
+    // Area de texto de solo lectura con la fuente y colores del tema
     private JTextArea crearArea() {
         JTextArea area = new JTextArea();
         area.setEditable(false);
@@ -32,23 +34,27 @@ public class PanelSalida extends JPanel {
         return area;
     }
 
+    // Vacia las tres pestanas antes de cada compilacion
     public void limpiar() {
         areaErrores.setText("");
         areaCuartetas.setText("");
         areaCodigoC.setText("");
     }
 
+    // Muestra el texto en Errores y cambia a esa pestana
     public void mostrarErrores(String texto) {
         areaErrores.setText(texto);
         areaErrores.setCaretPosition(0); // sin esto, un mensaje largo (ruta de archivo) deja el inicio fuera de vista
         pestanas.setSelectedIndex(0);
     }
 
+    // Muestra las cuartetas (sin cambiar de pestana)
     public void mostrarCuartetas(String texto) {
         areaCuartetas.setText(texto);
         areaCuartetas.setCaretPosition(0);
     }
 
+    // Muestra el codigo C y cambia a esa pestana
     public void mostrarCodigoC(String texto) {
         areaCodigoC.setText(texto);
         areaCodigoC.setCaretPosition(0);

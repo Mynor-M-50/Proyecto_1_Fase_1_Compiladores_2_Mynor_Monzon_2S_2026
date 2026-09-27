@@ -1,23 +1,11 @@
 grammar PigLatin;
 
 // ============================================================
-// Gramatica de Pig Latin (Proyecto 1 - Compiladores 2). Extension: .pig
-//
-// Adaptada de CodexLatinus.g4 (Practica 1) con los cambios que pide el
-// proyecto nuevo:
-//   - YA NO se definen estructuras (STRUCTURA) ni funciones (MUNERA/
-//     ACTIO/RATIO) dentro del .pig: se importan de archivos .y/.z.
-//   - Se agrega una seccion de "import" al inicio del archivo.
-//   - Se agrega "novus" para instanciar objetos de una clase importada,
-//     y llamadas a metodo sobre un objetivo (obj.metodo(args)).
-//
-// Confirmado contra main.pig real (el que compartio la auxiliar):
-//   - El cierre "FINIS" (mayuscula) de la seccion MAIOR es OPCIONAL en
-//     la practica (el ejemplo real no lo trae), aunque el documento
-//     original del proyecto si lo muestra. Lo dejo opcional para
-//     aceptar ambos casos.
-//   - El ';' (PYC) es opcional practicamente en todas partes, igual
-//     que en CodexLatinus.
+// Pig Latin (.pig): el programa principal. Sale de la gramatica de
+// CodexLatinus (practica 1), pero aca ya no se definen estructuras
+// ni funciones: se importan de archivos .y y .z. Se agrego import,
+// novus para crear objetos y llamadas obj.metodo(...).
+// El FINIS del final y los ';' son opcionales.
 // ============================================================
 
 // ---------- PARSER ----------
@@ -26,18 +14,22 @@ programa
     : seccionImports? seccionVariables? seccionMaior EOF
     ;
 
+// import Archivo.z / import carpeta.archivo.y
 seccionImports
     : (IMPORT rutaImport)*
     ;
 
+// ruta del import separada por puntos
 rutaImport
     : ID (PUNTO ID)*
     ;
 
+// VARIABILES> y las declaraciones globales
 seccionVariables
     : VARIABILES MAYOR declaracion*
     ;
 
+// MAIOR> y las instrucciones del programa
 seccionMaior
     : MAIOR MAYOR instruccion* FIN_PROGRAMA? PYC?
     ;
@@ -55,6 +47,7 @@ tipo
     | ID            # TipoEstructura
     ;
 
+// verum / falsus
 valorBooleano
     : VERUM
     | FALSUS
@@ -85,10 +78,12 @@ declaracionArreglo
     | SERIES ID dimension? DOS_PUNTOS listaValores PYC?        # ArregloInferido
     ;
 
+// [tamanio] de un arreglo
 dimension
     : COR_A expresion COR_C
     ;
 
+// {v1, v2, ...}
 listaValores
     : LLAVE_A (valorLista (COMA valorLista)*)? COMA? LLAVE_C
     ;
@@ -100,14 +95,17 @@ valorLista
     | expresion
     ;
 
+// {campo: valor; campo: valor}
 literalEstructura
     : LLAVE_A (asignacionAtributo (separadorCampo asignacionAtributo)*)? separadorCampo? LLAVE_C
     ;
 
+// campo: valor
 asignacionAtributo
     : ID DOS_PUNTOS valorAtributo
     ;
 
+// lo que puede ir como valor de un campo
 valorAtributo
     : literalEstructura
     | listaValores
@@ -121,6 +119,7 @@ dimensionPrimitiva
     : (NUMERUS | DECIMALIS | TEXTUM | LITTERA | BOOL) COR_A expresion COR_C
     ;
 
+// los campos se separan con ';' o ','
 separadorCampo
     : PYC
     | COMA
@@ -135,6 +134,7 @@ llamadaFuncion
     : ID PAR_A listaArgumentos? PAR_C
     ;
 
+// argumentos separados por coma
 listaArgumentos
     : expresion (COMA expresion)*
     ;
@@ -160,6 +160,7 @@ instruccion
     | declaracionArreglo
     ;
 
+// { instrucciones }
 bloque
     : LLAVE_A instruccion* LLAVE_C
     ;
@@ -169,12 +170,14 @@ objetivo
     : ID sufijoAcceso*
     ;
 
+// .metodo(args), .campo o [indice]
 sufijoAcceso
     : PUNTO ID PAR_A listaArgumentos? PAR_C   # SufijoMetodo
     | PUNTO ID                                 # SufijoAtributo
     | COR_A expresion COR_C                    # SufijoIndice
     ;
 
+// objetivo = valor (tambien estructura o lista)
 asignacion
     : objetivo IGUAL literalEstructura PYC?   # AsignacionEstructura
     | objetivo IGUAL listaValores PYC?        # AsignacionLista
@@ -186,6 +189,7 @@ incremento
     : objetivo (MASMAS | MENOSMENOS) PYC?
     ;
 
+// llamada suelta a una funcion o a un metodo
 llamadaInstruccion
     : llamadaFuncion PYC?     # LlamadaFuncionInstruccion
     | objetivo PYC?           # LlamadaMetodoInstruccion
@@ -203,10 +207,12 @@ condicional
       FINIS PYC?
     ;
 
+// aliter (condicion) { } = else if
 ramaAliterSi
     : ALITER PAR_A expresion PAR_C bloque
     ;
 
+// aliter { } = else
 ramaAliter
     : ALITER bloque
     ;
@@ -219,33 +225,40 @@ cicloDum
     : DUM PAR_A expresion PAR_C bloque FINIS PYC?
     ;
 
+// facere { } dum (condicion) = do-while
 cicloFacere
     : FACERE bloque DUM PAR_A expresion PAR_C PYC?
     ;
 
+// per (init; condicion; actualizacion) { } = for
 cicloPer
     : PER PAR_A inicializacionPer PYC expresion PYC actualizacionPer PAR_C
       bloque (FINIS PYC?)?
     ;
 
+// variable nueva o asignacion al inicio del per
 inicializacionPer
     : ESTO ID DOS_PUNTOS tipo expresion   # PerDeclara
     | objetivo IGUAL expresion            # PerAsigna
     ;
 
+// i++ / i-- o una asignacion al final de cada vuelta
 actualizacionPer
     : objetivo (MASMAS | MENOSMENOS)      # PerIncremento
     | objetivo IGUAL expresion            # PerAsignacion
     ;
 
+// perge = continue
 perge
     : PERGE PYC?
     ;
 
+// interrumpe = break
 interrumpe
     : INTERRUMPE PYC?
     ;
 
+// reddere = return
 reddere
     : REDDERE expresion? PYC?
     ;
@@ -262,6 +275,7 @@ imprimir
     : MAYORMAYOR expresion (MAYORMAYOR expresion)* PYC?
     ;
 
+// x << lee en una variable; << solo lee y descarta
 leer
     : objetivo MENORMENOR PYC?   # LeerEnVariable
     | MENORMENOR PYC?            # LeerDescartado
@@ -286,6 +300,7 @@ expresion
     | literal                                                        # ExprLiteral
     ;
 
+// numeros, cadenas, caracteres y booleanos
 literal
     : ENTERO    # LitEntero
     | DECIMAL   # LitDecimal

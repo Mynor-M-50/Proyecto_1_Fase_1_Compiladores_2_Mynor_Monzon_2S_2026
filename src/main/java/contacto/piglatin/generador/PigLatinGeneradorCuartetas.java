@@ -69,6 +69,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return gen;
     }
 
+    // Paso 1 (ver javadoc de la clase): registrar en el modelo antes de generar cuerpos
     public void registrarFirmas(ProgramaContext programa) {
         main = new ModeloPrograma.Funcion("main", null, false, true, Tipo.entero(), new ArrayList<>(), programa);
         modelo.agregarFuncion(main);
@@ -78,6 +79,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
     // Programa / secciones
     // =====================================================================
 
+    // Todo el .pig es el main de C
     @Override
     public Lugar visitPrograma(ProgramaContext ctx) {
         // Pig Latin no tiene bloques con ambito propio (el semantico usa
@@ -100,6 +102,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // Las instrucciones de MAIOR> en orden
     @Override
     public Lugar visitSeccionMaior(SeccionMaiorContext ctx) {
         gen.emitirEtiqueta("inicio_programa");
@@ -113,6 +116,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
     // Declaraciones
     // =====================================================================
 
+    // esto x : novus Clase(args) -> x = new_Clase(args)
     @Override
     public Lugar visitDeclObjeto(DeclObjetoContext ctx) {
         String clase = ctx.ID(1).getText();
@@ -127,6 +131,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // esto p : Persona {campo: valor; ...}
     @Override
     public Lugar visitDeclEstructura(DeclEstructuraContext ctx) {
         Tipo tipo = Tipo.estructura(ctx.ID(1).getText());
@@ -136,6 +141,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // esto b : verum / falsus / expresion
     @Override
     public Lugar visitDeclBooleana(DeclBooleanaContext ctx) {
         Lugar valor = (ctx.expresion() != null)
@@ -146,6 +152,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // esto x : tipo valor
     @Override
     public Lugar visitDeclConValor(DeclConValorContext ctx) {
         Lugar valor = valor(ctx.expresion());
@@ -154,6 +161,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // esto x : tipo  (si es estructura, ya queda reservada)
     @Override
     public Lugar visitDeclSinValor(DeclSinValorContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo());
@@ -164,6 +172,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // series a[n] : tipo {valores}
     @Override
     public Lugar visitArregloTipado(ArregloTipadoContext ctx) {
         Tipo tipo = Tipo.arregloDe(resolverTipo(ctx.tipo()));
@@ -171,6 +180,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // series a : {valores}  (el tipo sale del primer valor)
     @Override
     public Lugar visitArregloInferido(ArregloInferidoContext ctx) {
         Tipo elemento = Tipo.entero();
@@ -185,6 +195,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // Reserva el arreglo (con los valores, o vacio del tamanio dado) y lo asigna
     private void declararArreglo(String nombre, Tipo tipo, DimensionContext dimension, ListaValoresContext valores) {
         Lugar tamanio = (dimension != null) ? valor(dimension.expresion()) : null;
         Lugar arreglo = null;
@@ -226,6 +237,8 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return temp;
     }
 
+    // Asigna un "campo: valor" segun lo que venga: otra estructura, una lista,
+    // un tamanio (numerus[5]) o una expresion
     private void asignarCampo(Lugar destino, ModeloPrograma.Variable campo, ValorAtributoContext valor) {
         if (valor.literalEstructura() != null) {
             gen.emitirAsignacion(destino, generarEstructura(valor.literalEstructura(), campo.getTipo()));
@@ -265,6 +278,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return arreglo;
     }
 
+    // Copia los valores elemento por elemento (para arreglos de tamanio fijo del struct)
     private void asignarElementos(Lugar destino, ListaValoresContext ctx, Tipo elemento, int maximo) {
         List<ValorListaContext> valores = ctx.valorLista();
         for (int i = 0; i < valores.size() && i < maximo; i++) {
@@ -273,6 +287,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         }
     }
 
+    // Un elemento de {..}: una estructura literal o una expresion
     private Lugar valorLista(ValorListaContext valor, Tipo elemento) {
         if (valor.literalEstructura() != null) {
             return generarEstructura(valor.literalEstructura(), elemento);
@@ -280,11 +295,13 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return valor(valor.expresion());
     }
 
+    // destino = zc_reservar(sizeof(Estructura))  (campos en 0)
     private void reservarEstructura(Lugar destino, String nombreEstructura) {
         gen.emitirLlamada(destino, null, "new " + nombreEstructura, "zc_reservar",
                 List.of(new LiteralLugar("sizeof(" + nombreEstructura + ")")));
     }
 
+    // destino = zc_nuevo_arreglo(1, sizeof(elemento), tamanio)
     private void reservarArreglo(Lugar destino, Tipo elemento, Lugar tamanio) {
         gen.emitirLlamada(destino, null, "new " + elemento + "[]", "zc_nuevo_arreglo", List.of(
                 new LiteralLugar("1"),
@@ -296,6 +313,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
     // Instrucciones
     // =====================================================================
 
+    // objetivo = expresion
     @Override
     public Lugar visitAsignacionSimple(AsignacionSimpleContext ctx) {
         Lugar destino = valorObjetivo(ctx.objetivo());
@@ -304,6 +322,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // objetivo = {campo: valor; ...}  (estructura nueva)
     @Override
     public Lugar visitAsignacionEstructura(AsignacionEstructuraContext ctx) {
         Lugar destino = valorObjetivo(ctx.objetivo());
@@ -316,6 +335,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // objetivo = {v1, v2, ...}  (arreglo nuevo, o copia si es de tamanio fijo)
     @Override
     public Lugar visitAsignacionLista(AsignacionListaContext ctx) {
         Lugar destino = valorObjetivo(ctx.objetivo());
@@ -333,6 +353,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // x++ / x--
     @Override
     public Lugar visitIncremento(IncrementoContext ctx) {
         Lugar lugar = valorObjetivo(ctx.objetivo());
@@ -347,12 +368,15 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // obj.metodo(args) usado como instruccion suelta
     @Override
     public Lugar visitLlamadaMetodoInstruccion(LlamadaMetodoInstruccionContext ctx) {
         visit(ctx.objetivo());
         return null;
     }
 
+    // si / aliter si / aliter: cada condicion falsa salta a la siguiente rama;
+    // al terminar una rama se salta al final
     @Override
     public Lugar visitCondicional(CondicionalContext ctx) {
         String etiquetaFin = gen.nuevaEtiqueta();
@@ -389,6 +413,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // dum (mientras): inicio: si la condicion es falsa -> fin; cuerpo; goto inicio; fin:
     @Override
     public Lugar visitCicloDum(CicloDumContext ctx) {
         String etiquetaInicio = gen.nuevaEtiqueta();
@@ -407,6 +432,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // facere (hacer-mientras): inicio: cuerpo; si la condicion es verdadera -> inicio
     @Override
     public Lugar visitCicloFacere(CicloFacereContext ctx) {
         String etiquetaInicio = gen.nuevaEtiqueta();
@@ -426,6 +452,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // per (para): init; inicio: condicion; cuerpo; continua: actualizacion; goto inicio; fin:
     @Override
     public Lugar visitCicloPer(CicloPerContext ctx) {
         visit(ctx.inicializacionPer());
@@ -449,6 +476,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // esto i : numerus 0  dentro del per
     @Override
     public Lugar visitPerDeclara(PerDeclaraContext ctx) {
         Lugar valor = valor(ctx.expresion());
@@ -499,6 +527,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // reddere termina el programa (return del main)
     @Override
     public Lugar visitReddere(ReddereContext ctx) {
         // En el .pig, reddere termina el programa (return del main de C)
@@ -507,6 +536,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // >> a >> b: un print por cada valor, sin salto de linea
     @Override
     public Lugar visitImprimir(ImprimirContext ctx) {
         for (ExpresionContext expresion : ctx.expresion()) {
@@ -516,6 +546,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // x <<: lee una linea y la convierte al tipo de x
     @Override
     public Lugar visitLeerEnVariable(LeerEnVariableContext ctx) {
         Lugar destino = valorObjetivo(ctx.objetivo());
@@ -523,6 +554,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return null;
     }
 
+    // << solo: lee una linea y la descarta ("presione una tecla")
     @Override
     public Lugar visitLeerDescartado(LeerDescartadoContext ctx) {
         Lugar temp = gen.nuevoTemporal(Tipo.cadena());
@@ -534,6 +566,8 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
     // objetivo: id.campo[i].metodo() -- lista plana de sufijos
     // =====================================================================
 
+    // id.campo[i].metodo(): recorre los sufijos en orden, llevando el tipo actual
+    // para saber la clase de cada metodo y el nombre en C de cada campo
     @Override
     public Lugar visitObjetivo(ObjetivoContext ctx) {
         String nombre = ctx.ID().getText();
@@ -622,6 +656,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return (lugar != null) ? lugar : new LiteralLugar("0");
     }
 
+    // Evalua cada argumento en orden
     private List<Lugar> evaluarArgumentos(ListaArgumentosContext ctx) {
         List<Lugar> lugares = new ArrayList<>();
         if (ctx != null) {
@@ -636,6 +671,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
     // Expresiones
     // =====================================================================
 
+    // Un objetivo usado como valor
     @Override
     public Lugar visitExprAcceso(ExprAccesoContext ctx) {
         Lugar lugar = visit(ctx.objetivo());
@@ -678,6 +714,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return new LiteralLugar("0");
     }
 
+    // (x): no genera nada, solo pasa el valor de adentro
     @Override
     public Lugar visitExprAgrupada(ExprAgrupadaContext ctx) {
         Lugar lugar = valor(ctx.expresion());
@@ -685,6 +722,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return lugar;
     }
 
+    // -x o non x en un temporal nuevo
     @Override
     public Lugar visitExprUnaria(ExprUnariaContext ctx) {
         Lugar operando = valor(ctx.expresion());
@@ -696,6 +734,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return temp;
     }
 
+    // * /
     @Override
     public Lugar visitExprMulDiv(ExprMulDivContext ctx) {
         return (ctx.POR() != null)
@@ -703,6 +742,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, "/", Operador.DIVISION);
     }
 
+    // + / - (el + con una cadena es concatenacion, ver OperacionCuarteta)
     @Override
     public Lugar visitExprSumaResta(ExprSumaRestaContext ctx) {
         return (ctx.MAS() != null)
@@ -710,6 +750,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, "-", Operador.RESTA);
     }
 
+    // < > <= >=
     @Override
     public Lugar visitExprRelacional(ExprRelacionalContext ctx) {
         if (ctx.MENOR() != null) return emitirBinaria(ctx, "<", Operador.MENOR);
@@ -718,6 +759,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return emitirBinaria(ctx, ">=", Operador.MAYOR_IGUAL);
     }
 
+    // == / != (entre cadenas compara contenido, ver OperacionCuarteta)
     @Override
     public Lugar visitExprIgualdad(ExprIgualdadContext ctx) {
         return (ctx.IGUALIGUAL() != null)
@@ -725,11 +767,13 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, "!=", Operador.DIFERENTE);
     }
 
+    // a && b en un temporal (booleano)
     @Override
     public Lugar visitExprAnd(ExprAndContext ctx) {
         return emitirBinaria(ctx, "&&", Operador.AND);
     }
 
+    // a || b en un temporal (booleano)
     @Override
     public Lugar visitExprOr(ExprOrContext ctx) {
         return emitirBinaria(ctx, "||", Operador.OR);
@@ -747,6 +791,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return temp;
     }
 
+    // novus Clase(args) -> new_Clase(args)
     @Override
     public Lugar visitExprNuevoObjeto(ExprNuevoObjetoContext ctx) {
         String clase = ctx.ID().getText();
@@ -766,6 +811,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return visit(ctx.llamadaFuncion());
     }
 
+    // funcion(args) de un .y (sin temporal si no retorna nada)
     @Override
     public Lugar visitLlamadaFuncion(LlamadaFuncionContext ctx) {
         String nombre = ctx.ID().getText();
@@ -790,6 +836,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return (lugar != null) ? lugar : new LiteralLugar("0");
     }
 
+    // Tipo de una expresion: el calculado aqui si lo hay, si no el del semantico
     private Tipo tipo(ParseTree ctx) {
         Tipo calculado = tiposCalculados.get(ctx);
         if (calculado != null) {
@@ -810,6 +857,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         }
     }
 
+    // numerus/decimalis/textum/littera/bool o nombre de estructura
     private Tipo resolverTipo(TipoContext ctx) {
         if (ctx instanceof TipoNumerusContext) return Tipo.entero();
         if (ctx instanceof TipoDecimalisContext) return Tipo.decimal();
@@ -819,6 +867,7 @@ public class PigLatinGeneradorCuartetas extends PigLatinBaseVisitor<Lugar> {
         return Tipo.estructura(ctx.getText()); // TipoEstructura: nombre de una clase/estructura importada
     }
 
+    // Reporta un error semantico encontrado al generar (metodo/campo/funcion que no existe)
     private void error(String mensaje, ParserRuleContext ctx) {
         errores.agregar(TipoError.SEMANTICO, mensaje, ctx.getStart().getLine(),
                 ctx.getStart().getCharPositionInLine(), nombreArchivo);

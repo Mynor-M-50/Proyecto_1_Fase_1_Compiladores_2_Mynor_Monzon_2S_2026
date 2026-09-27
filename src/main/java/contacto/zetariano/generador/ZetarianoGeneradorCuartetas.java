@@ -79,6 +79,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
     // Paso 1: firmas
     // =====================================================================
 
+    // Paso 1 (ver javadoc de la clase): registrar en el modelo antes de generar cuerpos
     public void registrarFirmas(ProgramaContext programa) {
         ClaseContext clase = programa.clase();
         String nombreClase = clase.ID().getText();
@@ -118,6 +119,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         }
     }
 
+    // Parametros de un metodo/constructor con su tipo
     private List<ModeloPrograma.Variable> parametros(ParametrosContext ctx) {
         List<ModeloPrograma.Variable> lista = new ArrayList<>();
         if (ctx != null) {
@@ -139,6 +141,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // Genera el constructor implicito (si no hay ninguno) y luego cada miembro
     @Override
     public Lugar visitClase(ClaseContext ctx) {
         claseActual = ctx.ID().getText();
@@ -158,6 +161,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null; // su valor inicial se asigna dentro de cada constructor (inicializarCampos)
     }
 
+    // Constructor: primero los valores iniciales de los campos, luego el cuerpo
     @Override
     public Lugar visitConstructor(ConstructorContext ctx) {
         iniciarFuncion(funcionDe.get(ctx), "inicio_" + ctx.ID().getText() + "_constructor");
@@ -169,6 +173,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // Cada metodo es una funcion de C aparte
     @Override
     public Lugar visitMetodo(MetodoContext ctx) {
         iniciarFuncion(funcionDe.get(ctx), "inicio_" + ctx.ID().getText());
@@ -179,6 +184,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // Empieza el cuerpo de una funcion: ambitos nuevos y marca el inicio de su rango de cuartetas
     private void iniciarFuncion(ModeloPrograma.Funcion funcion, String etiqueta) {
         funcionActual = funcion;
         ambitos = new AmbitosGeneracion(funcion);
@@ -186,6 +192,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         gen.emitirEtiqueta(etiqueta);
     }
 
+    // Cierra el rango de cuartetas de la funcion actual
     private void terminarFuncion() {
         funcionActual.terminarCuerpo();
         funcionActual = null;
@@ -207,6 +214,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
     // Sentencias
     // =====================================================================
 
+    // { ... }: las variables declaradas adentro solo existen adentro
     @Override
     public Lugar visitBloque(BloqueContext ctx) {
         ambitos.entrar();
@@ -217,6 +225,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // int x = valor;
     @Override
     public Lugar visitDeclaracionVariable(DeclaracionVariableContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo(), ctx.LBRACKET().size());
@@ -224,6 +233,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // int i = 0 dentro del for
     @Override
     public Lugar visitDeclaracionVariableSinPuntoYComa(DeclaracionVariableSinPuntoYComaContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo(), ctx.LBRACKET().size());
@@ -231,6 +241,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // Declara la local (con su nombre en C) y le asigna el valor inicial si tiene
     private void declararLocal(String nombre, Tipo tipo, ExpresionContext inicial) {
         // El valor inicial se evalua ANTES de declarar: en "int x = x + 1"
         // la x de la derecha no puede ser la nueva.
@@ -241,6 +252,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         }
     }
 
+    // x = valor; / x += valor; / o una expresion suelta como metodo(); o i++;
     @Override
     public Lugar visitSentenciaExpresion(SentenciaExpresionContext ctx) {
         List<ExpresionContext> expresiones = ctx.expresion();
@@ -264,6 +276,8 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // if / else if / else: cada condicion falsa salta a la siguiente rama;
+    // al terminar una rama se salta al final
     @Override
     public Lugar visitSentenciaIf(SentenciaIfContext ctx) {
         List<ExpresionContext> condiciones = ctx.expresion();
@@ -287,6 +301,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // Cuerpo de if/while/for con o sin llaves (sin llaves igual abre un ambito)
     @Override
     public Lugar visitSentenciaOBloque(SentenciaOBloqueContext ctx) {
         if (ctx.bloque() != null) {
@@ -299,6 +314,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // inicio: si la condicion es falsa -> fin; cuerpo; goto inicio; fin:
     @Override
     public Lugar visitSentenciaWhile(SentenciaWhileContext ctx) {
         String etiquetaInicio = gen.nuevaEtiqueta();
@@ -317,6 +333,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // inicio: cuerpo; continua: si la condicion es verdadera -> inicio; fin:
     @Override
     public Lugar visitSentenciaDoWhile(SentenciaDoWhileContext ctx) {
         String etiquetaInicio = gen.nuevaEtiqueta();
@@ -336,6 +353,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // init; inicio: si la condicion es falsa -> fin; cuerpo; continua: update; goto inicio; fin:
     @Override
     public Lugar visitSentenciaFor(SentenciaForContext ctx) {
         ambitos.entrar(); // la variable del for solo existe dentro del for
@@ -406,6 +424,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         }
     }
 
+    // switch: compara el valor con cada case y salta al cuerpo del que coincida
     @Override
     public Lugar visitSentenciaSwitch(SentenciaSwitchContext ctx) {
         Lugar selector = valor(ctx.expresion());
@@ -448,12 +467,14 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // Tipo del literal de un case (para saber si se compara como cadena)
     private Tipo tipoLiteralCaso(LiteralCasoContext ctx) {
         if (ctx.STRING_LITERAL() != null) return Tipo.cadena();
         if (ctx.CHAR_LITERAL() != null) return Tipo.caracter();
         return Tipo.entero();
     }
 
+    // break: salta al final del ciclo o switch mas interno
     @Override
     public Lugar visitSentenciaBreak(SentenciaBreakContext ctx) {
         if (!pilaControlFlujo.isEmpty()) {
@@ -474,6 +495,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // return; en un constructor devuelve el objeto creado (this)
     @Override
     public Lugar visitSentenciaReturn(SentenciaReturnContext ctx) {
         if (funcionActual.esConstructor()) {
@@ -529,6 +551,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return new NombreLugar("this");
     }
 
+    // Un nombre: local/parametro, o campo de esta clase (this->campo)
     @Override
     public Lugar visitExpId(ExpIdContext ctx) {
         String nombre = ctx.ID().getText();
@@ -547,6 +570,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return new NombreLugar(ModeloPrograma.nombreSeguroC(nombre));
     }
 
+    // (x): no genera nada, solo pasa el valor de adentro
     @Override
     public Lugar visitExpParentesis(ExpParentesisContext ctx) {
         Lugar lugar = valor(ctx.expresion());
@@ -554,6 +578,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return lugar;
     }
 
+    // -x o !x en un temporal nuevo
     @Override
     public Lugar visitExpUnario(ExpUnarioContext ctx) {
         Lugar operando = valor(ctx.expresion());
@@ -565,6 +590,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return temp;
     }
 
+    // ++x / --x: suma/resta 1 y el valor de la expresion es la variable ya cambiada
     @Override
     public Lugar visitExpIncDecPrefijo(ExpIncDecPrefijoContext ctx) {
         Lugar lugar = valor(ctx.expresion());
@@ -574,6 +600,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return lugar;
     }
 
+    // x++ / x--: guarda el valor anterior en un temporal y luego suma/resta 1
     @Override
     public Lugar visitExpIncDecSufijo(ExpIncDecSufijoContext ctx) {
         Lugar lugar = valor(ctx.expresion());
@@ -585,6 +612,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return temp;
     }
 
+    // * / %
     @Override
     public Lugar visitExpMultiplicativa(ExpMultiplicativaContext ctx) {
         if (ctx.STAR() != null) return emitirBinaria(ctx, "*", Operador.MULTIPLICACION);
@@ -592,6 +620,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return emitirBinaria(ctx, "%", Operador.MODULO);
     }
 
+    // + / - (el + con una cadena es concatenacion, ver OperacionCuarteta)
     @Override
     public Lugar visitExpAditiva(ExpAditivaContext ctx) {
         return (ctx.PLUS() != null)
@@ -599,6 +628,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, "-", Operador.RESTA);
     }
 
+    // < > <= >=
     @Override
     public Lugar visitExpRelacional(ExpRelacionalContext ctx) {
         if (ctx.LT() != null) return emitirBinaria(ctx, "<", Operador.MENOR);
@@ -607,6 +637,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return emitirBinaria(ctx, ">=", Operador.MAYOR_IGUAL);
     }
 
+    // == / != (entre cadenas compara contenido, ver OperacionCuarteta)
     @Override
     public Lugar visitExpIgualdad(ExpIgualdadContext ctx) {
         return (ctx.EQ() != null)
@@ -614,11 +645,13 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, "!=", Operador.DIFERENTE);
     }
 
+    // a && b en un temporal (booleano)
     @Override
     public Lugar visitExpAnd(ExpAndContext ctx) {
         return emitirBinaria(ctx, "&&", Operador.AND);
     }
 
+    // a || b en un temporal (booleano)
     @Override
     public Lugar visitExpOr(ExpOrContext ctx) {
         return emitirBinaria(ctx, "||", Operador.OR);
@@ -636,6 +669,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return temp;
     }
 
+    // c ? a : b con saltos, dejando el resultado en un temporal
     @Override
     public Lugar visitExpTernario(ExpTernarioContext ctx) {
         Lugar condicion = valor(ctx.expresion(0));
@@ -655,6 +689,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return temp;
     }
 
+    // arreglo[indice]
     @Override
     public Lugar visitExpIndice(ExpIndiceContext ctx) {
         Lugar base = valor(ctx.expresion(0));
@@ -663,6 +698,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return new IndiceLugar(base, indice);
     }
 
+    // objeto.campo -> objeto->campo
     @Override
     public Lugar visitExpAcceso(ExpAccesoContext ctx) {
         Lugar base = valor(ctx.expresion());
@@ -674,10 +710,12 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return new CampoLugar(base, nombreCampo);
     }
 
+    // base->campo de la clase (sin reportar error si no existe)
     private Lugar lugarCampo(Lugar base, String clase, String nombreCampo) {
         return lugarCampo(base, clase, nombreCampo, null);
     }
 
+    // base->campo de la clase, con el nombre en C del campo; error si no existe
     private Lugar lugarCampo(Lugar base, String clase, String nombreCampo, ParserRuleContext ctx) {
         ModeloPrograma.Estructura estructura = modelo.buscarEstructura(clase);
         ModeloPrograma.Variable campo = (estructura != null) ? estructura.buscarCampo(nombreCampo) : null;
@@ -693,6 +731,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return new CampoLugar(base, campo.getNombreC());
     }
 
+    // metodo() sin objeto = this.metodo()
     @Override
     public Lugar visitExpLlamadaLocal(ExpLlamadaLocalContext ctx) {
         // metodo() dentro de la clase = this.metodo()
@@ -700,6 +739,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return emitirLlamadaMetodo(ctx, new NombreLugar("this"), claseActual, ctx.ID().getText(), argumentos);
     }
 
+    // objeto.metodo(args): el metodo se busca en la clase del objeto
     @Override
     public Lugar visitExpLlamadaMetodo(ExpLlamadaMetodoContext ctx) {
         Lugar objetivo = valor(ctx.expresion());
@@ -712,6 +752,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return emitirLlamadaMetodo(ctx, objetivo, tipoObjetivo.getNombreEstructura(), ctx.ID().getText(), argumentos);
     }
 
+    // Busca el metodo en el modelo y emite la llamada (sin temporal si es void)
     private Lugar emitirLlamadaMetodo(ParserRuleContext ctx, Lugar objetivo, String clase, String nombre,
                                       List<Lugar> argumentos) {
         ModeloPrograma.Funcion metodo = modelo.buscarMetodo(clase, nombre, argumentos.size());
@@ -726,6 +767,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return destino;
     }
 
+    // new Clase(args) -> new_Clase(args)
     @Override
     public Lugar visitExpNuevoObjeto(ExpNuevoObjetoContext ctx) {
         String clase = ctx.ID().getText();
@@ -741,6 +783,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return temp;
     }
 
+    // Evalua cada argumento en orden
     private List<Lugar> evaluarArgumentos(ArgumentosContext ctx) {
         List<Lugar> lugares = new ArrayList<>();
         if (ctx != null) {
@@ -751,6 +794,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return lugares;
     }
 
+    // new int[n][m] -> zc_nuevo_arreglo(2, sizeof(int), n, m)
     @Override
     public Lugar visitExpNuevoArreglo(ExpNuevoArregloContext ctx) {
         List<Lugar> argumentos = new ArrayList<>();
@@ -767,6 +811,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return temp;
     }
 
+    // {a, b, c}: reserva un arreglo de 3 y asigna elemento por elemento
     @Override
     public Lugar visitExpArregloLiteral(ExpArregloLiteralContext ctx) {
         // {a, b, c}: se reserva un arreglo de 3 y se asigna elemento por elemento
@@ -791,6 +836,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return temp;
     }
 
+    // println(x): imprime con salto de linea
     @Override
     public Lugar visitExpLlamadaPrintln(ExpLlamadaPrintlnContext ctx) {
         if (ctx.expresion() != null) {
@@ -802,6 +848,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // print(x): imprime sin salto de linea
     @Override
     public Lugar visitExpLlamadaPrint(ExpLlamadaPrintContext ctx) {
         if (ctx.expresion() != null) {
@@ -811,6 +858,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return null;
     }
 
+    // readln(): lee una linea como cadena
     @Override
     public Lugar visitExpLlamadaReadln(ExpLlamadaReadlnContext ctx) {
         calcularTipo(ctx, Tipo.cadena());
@@ -850,6 +898,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         }
     }
 
+    // Tipo escrito en el codigo (int, Nodo, int[]...)
     private Tipo resolverTipo(TipoContext ctx, int corchetes) {
         Tipo base = (ctx.tipoPrimitivo() != null)
                 ? resolverTipoPrimitivo(ctx.tipoPrimitivo())
@@ -865,6 +914,7 @@ public class ZetarianoGeneradorCuartetas extends ZetarianoBaseVisitor<Lugar> {
         return Tipo.cadena(); // KW_STRING
     }
 
+    // Reporta un error semantico encontrado al generar (metodo/campo/funcion que no existe)
     private void error(String mensaje, ParserRuleContext ctx) {
         errores.agregar(TipoError.SEMANTICO, mensaje, ctx.getStart().getLine(),
                 ctx.getStart().getCharPositionInLine(), nombreArchivo);

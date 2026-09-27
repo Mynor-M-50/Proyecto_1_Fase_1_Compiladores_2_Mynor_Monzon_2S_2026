@@ -13,6 +13,7 @@ public class NombreLugar extends Lugar {
         return nombre;
     }
 
+    // Solo el identificador: variable, parametro o temporal
     @Override
     public void generarC(StringBuilder codigo) {
         codigo.append(nombre);

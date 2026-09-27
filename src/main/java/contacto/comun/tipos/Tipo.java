@@ -31,6 +31,7 @@ public final class Tipo {
 
     // ---- fabricas ----
 
+    // Tipo simple (no arreglo) de una categoria primitiva
     public static Tipo de(TipoPrimitivo primitivo) {
         return new Tipo(primitivo, null, 0);
     }
@@ -44,6 +45,7 @@ public final class Tipo {
     public static Tipo vacio()    { return de(TipoPrimitivo.VACIO); }
     public static Tipo error()    { return de(TipoPrimitivo.ERROR); }
 
+    // Tipo de una clase/estructura por su nombre
     public static Tipo estructura(String nombre) {
         return new Tipo(TipoPrimitivo.ESTRUCTURA, nombre, 0);
     }
@@ -96,14 +98,17 @@ public final class Tipo {
         return primitivo == TipoPrimitivo.VACIO;
     }
 
+    // Booleano simple (un arreglo de booleanos no cuenta)
     public boolean esBooleano() {
         return !esArreglo() && primitivo == TipoPrimitivo.BOOLEANO;
     }
 
+    // Entero o decimal simple (un arreglo de numeros no cuenta)
     public boolean esNumerico() {
         return !esArreglo() && primitivo.esNumerico();
     }
 
+    // Cualquier tipo que no sea arreglo
     public boolean esEscalar() {
         return !esArreglo();
     }
@@ -116,6 +121,7 @@ public final class Tipo {
         return new Tipo(primitivo, nombreEstructura, profundidadArreglo - 1);
     }
 
+    // Mismo primitivo, misma profundidad de arreglo y misma estructura
     public boolean mismoTipoQue(Tipo otro) {
         if (otro == null) {
             return false;
@@ -141,6 +147,7 @@ public final class Tipo {
         return Objects.hash(primitivo, nombreEstructura, profundidadArreglo);
     }
 
+    // Formato legible: entero, Nodo, entero[][]
     @Override
     public String toString() {
         String base = esEstructura() ? nombreEstructura : primitivo.name().toLowerCase();

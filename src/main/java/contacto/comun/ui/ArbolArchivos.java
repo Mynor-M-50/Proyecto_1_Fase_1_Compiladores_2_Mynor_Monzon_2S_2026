@@ -32,6 +32,7 @@ public class ArbolArchivos extends JPanel {
     private Path raiz;
     private Consumer<Path> alAbrirArchivo;
 
+    // Arma el arbol, el doble clic para abrir y el menu de clic derecho
     public ArbolArchivos(Path raiz) {
         super(new BorderLayout());
         this.raiz = raiz;
@@ -63,10 +64,12 @@ public class ArbolArchivos extends JPanel {
         refrescar();
     }
 
+    // Accion a ejecutar al abrir un archivo con doble clic (la pone VentanaPrincipal)
     public void setAlAbrirArchivo(Consumer<Path> escuchador) {
         this.alAbrirArchivo = escuchador;
     }
 
+    // Cambia la carpeta raiz (Archivo > Abrir carpeta) y reconstruye el arbol
     public void cambiarRaiz(Path nuevaRaiz) {
         this.raiz = nuevaRaiz;
         refrescar();
@@ -76,12 +79,14 @@ public class ArbolArchivos extends JPanel {
         return raiz;
     }
 
+    // Reconstruye el arbol completo desde el disco
     public void refrescar() {
         DefaultMutableTreeNode nodoRaiz = construirNodo(raiz);
         arbol.setModel(new DefaultTreeModel(nodoRaiz));
         arbol.expandRow(0);
     }
 
+    // Nodo de un archivo, o de una carpeta con sus hijos (carpetas primero, luego por nombre)
     private DefaultMutableTreeNode construirNodo(Path ruta) {
         DefaultMutableTreeNode nodo = new DefaultMutableTreeNode(ruta);
         if (Files.isDirectory(ruta)) {
@@ -96,6 +101,7 @@ public class ArbolArchivos extends JPanel {
         return nodo;
     }
 
+    // Ruta del nodo seleccionado, o null si no hay seleccion
     private Path pathSeleccionado() {
         TreePath seleccion = arbol.getSelectionPath();
         if (seleccion == null) {
@@ -105,6 +111,7 @@ public class ArbolArchivos extends JPanel {
         return (Path) nodo.getUserObject();
     }
 
+    // Abre el archivo seleccionado (las carpetas no se abren)
     private void abrirSeleccionado() {
         Path seleccionado = pathSeleccionado();
         if (seleccionado != null && Files.isRegularFile(seleccionado) && alAbrirArchivo != null) {
@@ -112,6 +119,7 @@ public class ArbolArchivos extends JPanel {
         }
     }
 
+    // Menu de clic derecho: nuevo archivo/carpeta, renombrar, eliminar, refrescar
     private void mostrarMenuSiCorresponde(MouseEvent e) {
         if (!e.isPopupTrigger()) {
             return;
@@ -156,6 +164,7 @@ public class ArbolArchivos extends JPanel {
         menu.show(arbol, e.getX(), e.getY());
     }
 
+    // Pide el nombre y crea un archivo vacio en la carpeta
     private void crearArchivo(Path carpeta) {
         String nombre = JOptionPane.showInputDialog(this, "Nombre del archivo (con extension .y, .z o .pig):");
         if (nombre == null || nombre.isBlank()) {
@@ -170,6 +179,7 @@ public class ArbolArchivos extends JPanel {
         }
     }
 
+    // Pide el nombre y crea una carpeta
     private void crearCarpeta(Path carpeta) {
         String nombre = JOptionPane.showInputDialog(this, "Nombre de la carpeta:");
         if (nombre == null || nombre.isBlank()) {
@@ -184,6 +194,7 @@ public class ArbolArchivos extends JPanel {
         }
     }
 
+    // Pide el nombre nuevo y renombra el archivo/carpeta
     private void renombrar(Path ruta) {
         String nombreActual = ruta.getFileName().toString();
         String nuevoNombre = JOptionPane.showInputDialog(this, "Nuevo nombre:", nombreActual);
@@ -199,6 +210,7 @@ public class ArbolArchivos extends JPanel {
         }
     }
 
+    // Pide confirmacion y elimina (si es carpeta, con todo su contenido)
     private void eliminar(Path ruta) {
         int confirmacion = JOptionPane.showConfirmDialog(this,
                 "¿Eliminar '" + ruta.getFileName() + "'? Esta accion no se puede deshacer.",
@@ -215,6 +227,7 @@ public class ArbolArchivos extends JPanel {
         }
     }
 
+    // Borra primero el contenido de una carpeta y luego la carpeta
     private void eliminarRecursivo(Path ruta) throws IOException {
         if (Files.isDirectory(ruta)) {
             try (Stream<Path> hijos = Files.list(ruta)) {

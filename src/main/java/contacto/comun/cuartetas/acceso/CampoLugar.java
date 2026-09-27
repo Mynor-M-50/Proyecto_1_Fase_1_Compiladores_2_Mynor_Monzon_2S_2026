@@ -11,6 +11,7 @@ public class CampoLugar extends Lugar {
         this.nombreCampo = nombreCampo;
     }
 
+    // base->campo  (en C los objetos son punteros)
     @Override
     public void generarC(StringBuilder codigo) {
         base.generarC(codigo);

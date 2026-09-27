@@ -14,6 +14,7 @@ public class EtiquetaCuarteta extends Cuarteta {
         return nombre;
     }
 
+    // nombre:;  (el ';' permite que la etiqueta quede justo antes de una '}')
     @Override
     public void generarC(StringBuilder codigo) {
         codigo.append(nombre).append(":;\n"); // ";" vacio: en C una etiqueta no puede ir sola antes de "}"

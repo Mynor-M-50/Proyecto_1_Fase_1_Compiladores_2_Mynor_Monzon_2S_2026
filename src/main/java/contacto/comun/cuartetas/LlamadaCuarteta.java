@@ -41,6 +41,7 @@ public class LlamadaCuarteta extends Cuarteta {
     public String getNombreC() { return nombreC; }
     public List<Lugar> getArgumentos() { return argumentos; }
 
+    // [destino =] nombreC(objetivo, args...);  el objeto va como primer argumento
     @Override
     public void generarC(StringBuilder codigo) {
         if (destino != null) {
@@ -63,6 +64,7 @@ public class LlamadaCuarteta extends Cuarteta {
         codigo.append(");\n");
     }
 
+    // Formato legible de la cuarteta: t1 = call pila.desapilar()
     @Override
     public String toString() {
         String llamada = (objetivo != null ? objetivo + "." : "") + nombre

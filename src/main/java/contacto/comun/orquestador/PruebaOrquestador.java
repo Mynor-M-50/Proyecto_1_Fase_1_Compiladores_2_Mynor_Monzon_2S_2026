@@ -17,6 +17,7 @@ import java.nio.file.Path;
  */
 public class PruebaOrquestador {
 
+    // Compila el .pig, imprime las cuartetas de cada archivo y escribe salida.c
     public static void main(String[] args) throws IOException {
         String ruta = (args.length > 0) ? args[0] : "test-programs/pila/main.pig";
 

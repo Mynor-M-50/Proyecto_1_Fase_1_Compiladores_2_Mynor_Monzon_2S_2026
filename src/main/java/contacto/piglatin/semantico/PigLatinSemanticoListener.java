@@ -57,6 +57,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
     // Declaraciones (seccion VARIABILES)
     // =====================================================================
 
+    // esto x : novus Clase(args): la clase y el constructor deben existir
     @Override
     public void exitDeclObjeto(DeclObjetoContext ctx) {
         String nombreClase = ctx.ID(1).getText(); // ID(0) es el nombre de la variable, ID(1) la clase
@@ -64,16 +65,19 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         declarar(ctx.ID(0).getText(), Tipo.estructura(nombreClase), ctx);
     }
 
+    // esto p : Persona {..}
     @Override
     public void exitDeclEstructura(DeclEstructuraContext ctx) {
         declarar(ctx.ID(0).getText(), Tipo.estructura(ctx.ID(1).getText()), ctx);
     }
 
+    // esto b : verum / falsus
     @Override
     public void exitDeclBooleana(DeclBooleanaContext ctx) {
         declarar(ctx.ID().getText(), Tipo.booleano(), ctx);
     }
 
+    // esto x : tipo valor: el valor debe ser asignable al tipo
     @Override
     public void exitDeclConValor(DeclConValorContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo());
@@ -84,11 +88,13 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         declarar(ctx.ID().getText(), tipo, ctx);
     }
 
+    // esto x : tipo
     @Override
     public void exitDeclSinValor(DeclSinValorContext ctx) {
         declarar(ctx.ID().getText(), resolverTipo(ctx.tipo()), ctx);
     }
 
+    // Declara la variable del .pig (error si ya existe)
     private void declarar(String nombre, Tipo tipo, ParserRuleContext nodo) {
         Simbolo simbolo = new Simbolo(nombre, tipo, RolSimbolo.VARIABLE, linea(nodo), columna(nodo));
         if (!tabla.declarar(simbolo)) {
@@ -96,6 +102,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         }
     }
 
+    // series a : tipo {..}
     @Override
     public void exitArregloTipado(ArregloTipadoContext ctx) {
         Tipo tipoElemento = resolverTipo(ctx.tipo());
@@ -119,6 +126,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
     // Instrucciones
     // =====================================================================
 
+    // objetivo = valor: tipos compatibles
     @Override
     public void exitAsignacionSimple(AsignacionSimpleContext ctx) {
         Tipo tipoDestino = tipoDe(ctx.objetivo());
@@ -128,6 +136,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         }
     }
 
+    // x++ / x-- solo sobre numeros
     @Override
     public void exitIncremento(IncrementoContext ctx) {
         Tipo tipo = tipoDe(ctx.objetivo());
@@ -136,44 +145,52 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         }
     }
 
+    // La condicion del si debe ser booleana
     @Override
     public void exitCondicional(CondicionalContext ctx) {
         verificarCondicion(ctx.expresion());
     }
 
+    // La condicion de cada aliter si debe ser booleana
     @Override
     public void exitRamaAliterSi(RamaAliterSiContext ctx) {
         verificarCondicion(ctx.expresion());
     }
 
+    // Dentro del dum valen perge e interrumpe
     @Override
     public void enterCicloDum(CicloDumContext ctx) {
         profundidadCiclo++;
     }
 
+    // Sale del ciclo y revisa que la condicion sea booleana
     @Override
     public void exitCicloDum(CicloDumContext ctx) {
         profundidadCiclo--;
         verificarCondicion(ctx.expresion());
     }
 
+    // Dentro del facere valen perge e interrumpe
     @Override
     public void enterCicloFacere(CicloFacereContext ctx) {
         profundidadCiclo++;
     }
 
+    // Sale del ciclo y revisa que la condicion sea booleana
     @Override
     public void exitCicloFacere(CicloFacereContext ctx) {
         profundidadCiclo--;
         verificarCondicion(ctx.expresion());
     }
 
+    // Abre el ambito del per; dentro valen perge e interrumpe
     @Override
     public void enterCicloPer(CicloPerContext ctx) {
         tabla.entrarAmbito("per");
         profundidadCiclo++;
     }
 
+    // Cierra el ambito del per y revisa que la condicion sea booleana
     @Override
     public void exitCicloPer(CicloPerContext ctx) {
         profundidadCiclo--;
@@ -181,6 +198,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         verificarCondicion(ctx.expresion());
     }
 
+    // esto i : numerus 0 dentro del per
     @Override
     public void exitPerDeclara(PerDeclaraContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo());
@@ -191,6 +209,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         declarar(ctx.ID().getText(), tipo, ctx);
     }
 
+    // i = valor como inicializacion del per
     @Override
     public void exitPerAsigna(PerAsignaContext ctx) {
         Tipo tipoDestino = tipoDe(ctx.objetivo());
@@ -200,6 +219,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         }
     }
 
+    // Una condicion debe ser booleana
     private void verificarCondicion(ExpresionContext ctx) {
         Tipo tipo = tipoDe(ctx);
         if (!TablaTipos.esCondicionValida(tipo)) {
@@ -207,6 +227,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         }
     }
 
+    // perge (continue) solo dentro de un ciclo
     @Override
     public void exitPerge(PergeContext ctx) {
         if (profundidadCiclo == 0) {
@@ -214,6 +235,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         }
     }
 
+    // interrumpe (break) solo dentro de un ciclo
     @Override
     public void exitInterrumpe(InterrumpeContext ctx) {
         if (profundidadCiclo == 0) {
@@ -221,6 +243,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         }
     }
 
+    // No se puede imprimir un arreglo o un objeto completo
     @Override
     public void exitImprimir(ImprimirContext ctx) {
         for (ExpresionContext valor : ctx.expresion()) {
@@ -231,6 +254,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         }
     }
 
+    // No se puede leer directamente sobre un arreglo o un objeto
     @Override
     public void exitLeerEnVariable(LeerEnVariableContext ctx) {
         Tipo tipo = tipoDe(ctx.objetivo());
@@ -271,6 +295,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         tipos.put(ctx, actual);
     }
 
+    // Tipo de base.campo, buscando el campo en la clase/estructura de base
     private Tipo resolverAtributo(Tipo base, String nombre, ParserRuleContext nodo) {
         if (base.esError()) {
             return Tipo.error();
@@ -287,6 +312,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         return campo;
     }
 
+    // Tipo de base[i]: el indice numerico y la base un arreglo
     private Tipo resolverIndice(Tipo base, ExpresionContext indiceCtx, ParserRuleContext nodo) {
         Tipo indice = tipoDe(indiceCtx);
         if (!indice.esError() && !indice.esNumerico()) {
@@ -302,6 +328,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         return base.tipoElemento();
     }
 
+    // Tipo de base.metodo(args), buscando el metodo en la clase de base
     private Tipo resolverMetodo(Tipo base, SufijoMetodoContext ctx) {
         String nombre = ctx.ID().getText();
         int aridad = (ctx.listaArgumentos() != null) ? ctx.listaArgumentos().expresion().size() : 0;
@@ -321,6 +348,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         return metodo.getRetorno();
     }
 
+    // Un objetivo usado como valor tiene el tipo del objetivo
     @Override
     public void exitExprAcceso(ExprAccesoContext ctx) {
         tipos.put(ctx, tipoDe(ctx.objetivo()));
@@ -365,11 +393,13 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         tipos.put(ctx, tipoDe(ctx.literal()));
     }
 
+    // (x) tiene el tipo de x
     @Override
     public void exitExprAgrupada(ExprAgrupadaContext ctx) {
         tipos.put(ctx, tipoDe(ctx.expresion()));
     }
 
+    // -x / non x: tipo segun TablaTipos, error si no aplica
     @Override
     public void exitExprUnaria(ExprUnariaContext ctx) {
         Tipo operando = tipoDe(ctx.expresion());
@@ -417,6 +447,8 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         resolverBinaria(ctx, ctx.expresion(0), Operador.OR, ctx.expresion(1));
     }
 
+    // Tipo de "izq op der" segun TablaTipos; reporta error si no es valida
+    // (sin repetir errores si un lado ya venia con error)
     private void resolverBinaria(ParserRuleContext nodo, ExpresionContext izq, Operador operador, ExpresionContext der) {
         Tipo tipoIzq = tipoDe(izq);
         Tipo tipoDer = tipoDe(der);
@@ -427,6 +459,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         tipos.put(nodo, resultado);
     }
 
+    // novus Clase(args): la clase y el constructor deben existir
     @Override
     public void exitExprNuevoObjeto(ExprNuevoObjetoContext ctx) {
         verificarConstructor(ctx.ID().getText(), ctx.listaArgumentos(), ctx);
@@ -448,6 +481,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         tipos.put(ctx, funcion.getRetorno());
     }
 
+    // Una funcion usada como valor no puede ser de las que no retornan nada
     @Override
     public void exitExprLlamada(ExprLlamadaContext ctx) {
         Tipo tipo = tipoDe(ctx.llamadaFuncion());
@@ -459,6 +493,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         tipos.put(ctx, tipo);
     }
 
+    // La clase debe existir (importada) y tener un constructor con esa cantidad de argumentos
     private void verificarConstructor(String clase, ListaArgumentosContext argumentos, ParserRuleContext ctx) {
         ModeloPrograma.Estructura estructura = modelo.buscarEstructura(clase);
         if (estructura == null || !estructura.esClase()) {
@@ -494,6 +529,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
     // Utilidades
     // =====================================================================
 
+    // numerus/decimalis/textum/littera/bool o nombre de clase/estructura
     private Tipo resolverTipo(TipoContext ctx) {
         if (ctx instanceof TipoNumerusContext) return Tipo.entero();
         if (ctx instanceof TipoDecimalisContext) return Tipo.decimal();
@@ -517,6 +553,7 @@ public class PigLatinSemanticoListener extends PigLatinBaseListener {
         return ctx.getStart().getCharPositionInLine();
     }
 
+    // Registra un error semantico con archivo, linea y columna
     private void error(String mensaje, ParserRuleContext ctx) {
         errores.agregar(TipoError.SEMANTICO, mensaje, linea(ctx), columna(ctx), nombreArchivo);
     }

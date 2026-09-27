@@ -21,6 +21,7 @@ public final class AmbitosGeneracion {
     private final ModeloPrograma.Funcion funcion;
     private final Deque<Map<String, String>> pila = new ArrayDeque<>(); // nombre fuente -> nombre en C
 
+    // Abre el ambito de la funcion y registra sus parametros como visibles
     public AmbitosGeneracion(ModeloPrograma.Funcion funcion) {
         this.funcion = funcion;
         entrar();
@@ -29,10 +30,12 @@ public final class AmbitosGeneracion {
         }
     }
 
+    // Abre un ambito nuevo (bloque, for, para...)
     public void entrar() {
         pila.push(new HashMap<>());
     }
 
+    // Cierra el ambito actual; el de la funcion (el primero) nunca se cierra
     public void salir() {
         if (pila.size() > 1) {
             pila.pop();
@@ -52,6 +55,8 @@ public final class AmbitosGeneracion {
         return nombreC;
     }
 
+    // Un nombre en C esta ocupado si ya es parametro, es "this" en un metodo,
+    // o ya existe como local con OTRO tipo (mismo tipo = se reutiliza)
     private boolean ocupado(String nombreC, Tipo tipo) {
         for (ModeloPrograma.Variable parametro : funcion.getParametros()) {
             if (parametro.getNombreC().equals(nombreC)) {

@@ -73,6 +73,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
     // Clase, campos, constructor, metodo
     // =====================================================================
 
+    // Guarda el nombre de la clase y pre-registra todos sus miembros
     @Override
     public void enterClase(ClaseContext ctx) {
         nombreClaseActual = ctx.ID().getText();
@@ -93,6 +94,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Declara un campo con su tipo (error si el nombre se repite)
     private void preRegistrarCampo(CampoContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo(), contarCorchetes(ctx.LBRACKET()));
         Simbolo simbolo = new Simbolo(ctx.ID().getText(), tipo, RolSimbolo.VARIABLE,
@@ -103,6 +105,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Declara un constructor por cantidad de parametros; su nombre debe ser el de la clase
     private void preRegistrarConstructor(ConstructorContext ctx) {
         String nombre = ctx.ID().getText();
         if (!nombre.equals(nombreClaseActual)) {
@@ -120,6 +123,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Declara un metodo con su tipo de retorno, por cantidad de parametros
     private void preRegistrarMetodo(MetodoContext ctx) {
         String nombre = ctx.ID().getText();
         Tipo tipoRetorno = (ctx.VOID() != null)
@@ -133,6 +137,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Valida el valor inicial del campo contra su tipo
     @Override
     public void exitCampo(CampoContext ctx) {
         // El simbolo ya se declaro en el pre-registro (enterClase); aqui
@@ -145,6 +150,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Abre el ambito del constructor con sus parametros
     @Override
     public void enterConstructor(ConstructorContext ctx) {
         // La firma ya se pre-registro; aqui solo entramos al ambito de
@@ -154,12 +160,14 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipoRetornoActual = Tipo.vacio();
     }
 
+    // Cierra el ambito del constructor
     @Override
     public void exitConstructor(ConstructorContext ctx) {
         tabla.salirAmbito();
         tipoRetornoActual = null;
     }
 
+    // Abre el ambito del metodo con sus parametros y recuerda su tipo de retorno
     @Override
     public void enterMetodo(MetodoContext ctx) {
         Tipo tipoRetorno = (ctx.VOID() != null)
@@ -180,6 +188,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipoRetornoActual = null;
     }
 
+    // Declara cada parametro en el ambito actual (error si se repite)
     private void declararParametros(ParametrosContext ctx) {
         if (ctx == null) {
             return;
@@ -198,6 +207,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
     // Sentencias
     // =====================================================================
 
+    // int x = valor;
     @Override
     public void exitDeclaracionVariable(DeclaracionVariableContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo(), contarCorchetes(ctx.LBRACKET()));
@@ -213,6 +223,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         declararVariable(ctx.ID().getText(), tipo, ctx.expresion(), ctx);
     }
 
+    // Valida el valor inicial y declara la variable (error si ya existe en el ambito)
     private void declararVariable(String nombre, Tipo tipo, ExpresionContext inicializador,
                                    ParserRuleContext nodo) {
         if (inicializador != null) {
@@ -225,6 +236,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Asignaciones: = pide tipos compatibles; += -= *= piden una operacion valida
     @Override
     public void exitSentenciaExpresion(SentenciaExpresionContext ctx) {
         List<ExpresionContext> expresiones = ctx.expresion();
@@ -262,6 +274,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Se puede asignar a una variable, a un campo o a un elemento de arreglo
     private boolean esDestinoValido(ExpresionContext ctx) {
         return ctx instanceof ExpIdContext
                 || ctx instanceof ExpAccesoContext
@@ -278,12 +291,14 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         profundidadCiclo++;
     }
 
+    // Cierra el ambito del for
     @Override
     public void exitSentenciaFor(SentenciaForContext ctx) {
         profundidadCiclo--;
         tabla.salirAmbito();
     }
 
+    // Dentro del while valen break y continue
     @Override
     public void enterSentenciaWhile(SentenciaWhileContext ctx) {
         profundidadCiclo++;
@@ -294,6 +309,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         profundidadCiclo--;
     }
 
+    // Dentro del do-while valen break y continue
     @Override
     public void enterSentenciaDoWhile(SentenciaDoWhileContext ctx) {
         profundidadCiclo++;
@@ -304,6 +320,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         profundidadCiclo--;
     }
 
+    // break solo dentro de un ciclo o switch
     @Override
     public void exitSentenciaBreak(SentenciaBreakContext ctx) {
         if (profundidadCiclo == 0 && profundidadSwitch == 0) {
@@ -311,6 +328,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // continue solo dentro de un ciclo
     @Override
     public void exitSentenciaContinue(SentenciaContinueContext ctx) {
         if (profundidadCiclo == 0) {
@@ -318,6 +336,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // return debe coincidir con el tipo del metodo (void sin valor, el resto con valor)
     @Override
     public void exitSentenciaReturn(SentenciaReturnContext ctx) {
         if (tipoRetornoActual == null) {
@@ -344,6 +363,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Cada condicion del if / else if debe ser booleana
     @Override
     public void exitSentenciaIf(SentenciaIfContext ctx) {
         for (ExpresionContext condicion : ctx.expresion()) {
@@ -351,6 +371,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Dentro del switch vale break (continue no)
     @Override
     public void enterSentenciaSwitch(SentenciaSwitchContext ctx) {
         profundidadSwitch++;
@@ -369,6 +390,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // Una condicion debe ser booleana
     private void verificarCondicion(ExpresionContext ctx) {
         Tipo tipo = tipoDe(ctx);
         if (!TablaTipos.esCondicionValida(tipo)) {
@@ -417,11 +439,13 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(ctx, Tipo.nulo());
     }
 
+    // this es un objeto de la clase actual
     @Override
     public void exitExpThis(ExpThisContext ctx) {
         tipos.put(ctx, Tipo.estructura(nombreClaseActual));
     }
 
+    // Tipo de una variable: se busca en la tabla (error si no existe o si es una funcion)
     @Override
     public void exitExpId(ExpIdContext ctx) {
         String nombre = ctx.ID().getText();
@@ -439,11 +463,13 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // (x) tiene el tipo de x
     @Override
     public void exitExpParentesis(ExpParentesisContext ctx) {
         tipos.put(ctx, tipoDe(ctx.expresion()));
     }
 
+    // -x / !x: tipo segun TablaTipos, error si no aplica
     @Override
     public void exitExpUnario(ExpUnarioContext ctx) {
         Tipo operando = tipoDe(ctx.expresion());
@@ -455,18 +481,21 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // ++x / --x
     @Override
     public void exitExpIncDecPrefijo(ExpIncDecPrefijoContext ctx) {
         validarIncDec(ctx.expresion(), ctx);
         tipos.put(ctx, tipoDe(ctx.expresion()));
     }
 
+    // x++ / x--
     @Override
     public void exitExpIncDecSufijo(ExpIncDecSufijoContext ctx) {
         validarIncDec(ctx.expresion(), ctx);
         tipos.put(ctx, tipoDe(ctx.expresion()));
     }
 
+    // ++/-- solo sobre algo asignable (variable, campo, arreglo[i]) y numerico
     private void validarIncDec(ExpresionContext operando, ParserRuleContext nodo) {
         if (!esDestinoValido(operando)) {
             error("++ / -- solo se puede aplicar a una variable, this.campo "
@@ -479,6 +508,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         }
     }
 
+    // * / %
     @Override
     public void exitExpMultiplicativa(ExpMultiplicativaContext ctx) {
         Operador operador = (ctx.STAR() != null) ? Operador.MULTIPLICACION
@@ -487,12 +517,14 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         resolverBinaria(ctx, ctx.expresion(0), operador, ctx.expresion(1));
     }
 
+    // + - (+ con una cadena es concatenacion)
     @Override
     public void exitExpAditiva(ExpAditivaContext ctx) {
         Operador operador = (ctx.PLUS() != null) ? Operador.SUMA : Operador.RESTA;
         resolverBinaria(ctx, ctx.expresion(0), operador, ctx.expresion(1));
     }
 
+    // < > <= >=
     @Override
     public void exitExpRelacional(ExpRelacionalContext ctx) {
         Operador operador = (ctx.LT() != null) ? Operador.MENOR
@@ -502,22 +534,27 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         resolverBinaria(ctx, ctx.expresion(0), operador, ctx.expresion(1));
     }
 
+    // == !=
     @Override
     public void exitExpIgualdad(ExpIgualdadContext ctx) {
         Operador operador = (ctx.EQ() != null) ? Operador.IGUAL : Operador.DIFERENTE;
         resolverBinaria(ctx, ctx.expresion(0), operador, ctx.expresion(1));
     }
 
+    // &&
     @Override
     public void exitExpAnd(ExpAndContext ctx) {
         resolverBinaria(ctx, ctx.expresion(0), Operador.AND, ctx.expresion(1));
     }
 
+    // ||
     @Override
     public void exitExpOr(ExpOrContext ctx) {
         resolverBinaria(ctx, ctx.expresion(0), Operador.OR, ctx.expresion(1));
     }
 
+    // Tipo de "izq op der" segun TablaTipos; reporta error si no es valida
+    // (sin repetir errores si un lado ya venia con error)
     private void resolverBinaria(ParserRuleContext nodo, ExpresionContext izq,
                                   Operador operador, ExpresionContext der) {
         Tipo tipoIzq = tipoDe(izq);
@@ -529,6 +566,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(nodo, resultado);
     }
 
+    // c ? a : b: condicion booleana y las dos ramas de tipo compatible
     @Override
     public void exitExpTernario(ExpTernarioContext ctx) {
         Tipo condicion = tipoDe(ctx.expresion(0));
@@ -555,6 +593,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // arreglo[i]: el indice debe ser numerico y la base un arreglo
     @Override
     public void exitExpIndice(ExpIndiceContext ctx) {
         Tipo base = tipoDe(ctx.expresion(0));
@@ -576,6 +615,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(ctx, resultado);
     }
 
+    // objeto.campo: tipo del campo (solo se valida si es de esta misma clase)
     @Override
     public void exitExpAcceso(ExpAccesoContext ctx) {
         Tipo base = tipoDe(ctx.expresion());
@@ -631,6 +671,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(ctx, simbolo.getTipo());
     }
 
+    // new Clase(args): si es esta misma clase, el constructor debe existir
     @Override
     public void exitExpNuevoObjeto(ExpNuevoObjetoContext ctx) {
         String nombreClase = ctx.ID().getText();
@@ -648,6 +689,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(ctx, Tipo.estructura(nombreClase));
     }
 
+    // new int[n][m]: cada tamanio debe ser numerico
     @Override
     public void exitExpNuevoArreglo(ExpNuevoArregloContext ctx) {
         Tipo base = resolverTipoPrimitivo(ctx.tipoPrimitivo());
@@ -660,6 +702,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         tipos.put(ctx, Tipo.arregloDe(base, ctx.expresion().size()));
     }
 
+    // {a, b, c}: todos los elementos del mismo tipo; el tipo es arreglo de ese tipo
     @Override
     public void exitExpArregloLiteral(ExpArregloLiteralContext ctx) {
         List<ExpresionContext> elementos = ctx.expresion();
@@ -684,6 +727,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
     // Utilidades
     // =====================================================================
 
+    // Tipo de un miembro de un objeto (otra clase = error sin mensaje, ver limitacion)
     private Tipo tipoDeMiembro(Tipo base, String nombre, RolSimbolo rolEsperado, ParserRuleContext nodo) {
         if (base.esError()) {
             return Tipo.error();
@@ -704,6 +748,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         return simbolo.getTipo();
     }
 
+    // El valor inicial debe ser asignable al tipo declarado
     private void validarInicializador(ExpresionContext valor, Tipo tipoEsperado, ParserRuleContext nodo) {
         Tipo tipoValor = tipoDe(valor);
         if (valor instanceof ExpArregloLiteralContext && tipoEsperado.esArreglo()) {
@@ -729,6 +774,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         return corchetes > 0 ? Tipo.arregloDe(base, corchetes) : base;
     }
 
+    // int/double/char/boolean/String -> tipo comun del compilador
     private Tipo resolverTipoPrimitivo(TipoPrimitivoContext ctx) {
         if (ctx.KW_INT() != null) return Tipo.entero();
         if (ctx.KW_DOUBLE() != null) return Tipo.decimal();
@@ -759,6 +805,7 @@ public class ZetarianoSemanticoListener extends ZetarianoBaseListener {
         return ctx.getStart().getCharPositionInLine();
     }
 
+    // Registra un error semantico con archivo, linea y columna
     private void error(String mensaje, ParserRuleContext ctx) {
         errores.agregar(TipoError.SEMANTICO, mensaje, linea(ctx), columna(ctx), nombreArchivo);
     }

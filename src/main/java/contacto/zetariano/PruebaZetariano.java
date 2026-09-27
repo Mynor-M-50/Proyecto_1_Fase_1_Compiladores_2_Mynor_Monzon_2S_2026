@@ -32,6 +32,7 @@ import java.util.List;
  */
 public class PruebaZetariano {
 
+    // Analiza uno o varios .z juntos, imprime sus cuartetas y escribe salida.c
     public static void main(String[] args) throws IOException {
         List<String> rutas = (args.length > 0)
                 ? List.of(args)
@@ -100,6 +101,7 @@ public class PruebaZetariano {
         System.out.println("--- Codigo C escrito en " + salida.toAbsolutePath() + " ---");
     }
 
+    // Imprime los errores y termina con codigo 1
     private static void imprimirErrores(RecolectorErrores errores) {
         System.out.println("Se encontraron errores:");
         for (ErrorCompilacion error : errores.getErrores()) {

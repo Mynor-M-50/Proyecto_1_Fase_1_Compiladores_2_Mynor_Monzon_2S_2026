@@ -9,6 +9,7 @@ public class LiteralLugar extends Lugar {
         this.textoC = textoC;
     }
 
+    // El literal se copia tal cual (ya viene escrito como en C)
     @Override
     public void generarC(StringBuilder codigo) {
         codigo.append(textoC);

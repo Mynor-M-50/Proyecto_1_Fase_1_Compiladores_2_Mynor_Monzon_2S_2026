@@ -28,18 +28,22 @@ public class GeneradorCuartetas {
         return new NombreLugar(nombreTemporal(tiposTemporales.size() - 1));
     }
 
+    // Nombre del temporal numero "indice": t0, t1, ...
     public static String nombreTemporal(int indice) {
         return "t" + indice;
     }
 
+    // Etiqueta nueva y unica dentro del archivo: L0, L1, ...
     public String nuevaEtiqueta() {
         return "L" + (contadorEtiquetas++);
     }
 
+    // destino = origen
     public void emitirAsignacion(Lugar destino, Lugar origen) {
         cuartetas.add(new AsignacionCuarteta(contadorCuartetas++, destino, origen));
     }
 
+    // destino = izquierdo op derecho, sin tipos (para operaciones numericas simples como x = x + 1)
     public void emitirOperacionBinaria(Lugar destino, Lugar izquierdo, String operador, Lugar derecho) {
         emitirOperacionBinaria(destino, izquierdo, operador, derecho, null, null);
     }
@@ -54,26 +58,32 @@ public class GeneradorCuartetas {
                 tipoIzquierdo, tipoDerecho));
     }
 
+    // destino = op operando  (-x, !x)
     public void emitirOperacionUnaria(Lugar destino, String operador, Lugar operando) {
         cuartetas.add(new OperacionCuarteta(contadorCuartetas++, destino, operando, operador, null, null, null));
     }
 
+    // Marca un punto al que se puede saltar
     public void emitirEtiqueta(String nombre) {
         cuartetas.add(new EtiquetaCuarteta(contadorCuartetas++, nombre));
     }
 
+    // goto etiqueta
     public void emitirSalto(String etiquetaDestino) {
         cuartetas.add(new SaltoCuarteta(contadorCuartetas++, etiquetaDestino));
     }
 
+    // if (!condicion) goto etiqueta  -- lo usan si/mientras/para para saltarse el cuerpo
     public void emitirSaltoSiFalso(Lugar condicion, String etiquetaDestino) {
         cuartetas.add(new SaltoCondicionalCuarteta(contadorCuartetas++, condicion, true, etiquetaDestino));
     }
 
+    // if (condicion) goto etiqueta  -- lo usan do-while y los casos de switch
     public void emitirSaltoSiVerdadero(Lugar condicion, String etiquetaDestino) {
         cuartetas.add(new SaltoCondicionalCuarteta(contadorCuartetas++, condicion, false, etiquetaDestino));
     }
 
+    // printf del valor con el formato de su tipo, con o sin salto de linea
     public void emitirImprimir(Lugar valor, String formatoC, boolean saltoLinea) {
         cuartetas.add(new ImprimirCuarteta(contadorCuartetas++, valor, formatoC, saltoLinea));
     }
@@ -92,6 +102,7 @@ public class GeneradorCuartetas {
         cuartetas.add(new LlamadaCuarteta(contadorCuartetas++, destino, objetivo, nombre, nombreC, argumentos));
     }
 
+    // return valor;  (valor null = return sin valor)
     public void emitirRetorno(Lugar valor) {
         cuartetas.add(new RetornoCuarteta(contadorCuartetas++, valor));
     }

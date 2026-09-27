@@ -27,6 +27,7 @@ import java.nio.file.Path;
  */
 public class PruebaYLang {
 
+    // Analiza un .y, imprime sus cuartetas y escribe salida.c
     public static void main(String[] args) throws IOException {
         String ruta = (args.length > 0) ? args[0] : "test-programs/pila/utils/utils.y";
         RecolectorErrores errores = new RecolectorErrores();
@@ -79,6 +80,7 @@ public class PruebaYLang {
         System.out.println("\n--- Codigo C escrito en " + salida.toAbsolutePath() + " ---");
     }
 
+    // Imprime los errores y termina con codigo 1
     private static void imprimirErrores(RecolectorErrores errores) {
         System.out.println("Se encontraron errores:");
         for (ErrorCompilacion error : errores.getErrores()) {

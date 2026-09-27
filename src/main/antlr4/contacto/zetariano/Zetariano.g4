@@ -1,16 +1,11 @@
 grammar Zetariano;
 
 // ============================================================
-// Gramatica del lenguaje ZETARIANO (Proyecto 1 - Compiladores 2)
-// Extension de archivo: .z
-// El archivo debe llamarse igual que la clase definida adentro.
-// Notas de diseno:
-//  - No hay encapsulamiento, herencia ni polimorfismo (fuera de alcance).
-//  - Los objetos viven en heap (decision semantica, no de gramatica).
-//  - La gramatica es permisiva a proposito en algunos puntos (p.ej. el
-//    lado izquierdo de una asignacion es "expresion" en vez de un
-//    "lvalue" estricto) para que sea el analizador semantico el que
-//    reporte el error puntual, en vez de un error sintactico generico.
+// Zetariano (.z): lenguaje orientado a objetos parecido a Java.
+// Cada archivo trae una sola clase y se llama igual que ella.
+// No hay herencia ni polimorfismo. Algunas reglas aceptan de mas
+// (por ejemplo el lado izquierdo de una asignacion) y es el
+// semantico el que da el error exacto.
 // ============================================================
 
 // ---------- PARSER ----------
@@ -19,45 +14,55 @@ programa
     : clase EOF
     ;
 
+// public class Nombre { ... }
 clase
     : PUBLIC CLASS ID LBRACE miembro* RBRACE
     ;
 
+// lo que puede ir dentro de la clase
 miembro
     : campo
     | constructor
     | metodo
     ;
 
+// atributo, con valor inicial opcional
 campo
     : modificador? tipo (LBRACKET RBRACKET)* ID (ASSIGN expresion)? SEMI
     ;
 
+// public / private (no se validan, no hay encapsulamiento)
 modificador
     : PUBLIC | PRIVATE
     ;
 
+// public Nombre(params) { ... }
 constructor
     : PUBLIC ID LPAREN parametros? RPAREN bloque
     ;
 
+// public tipo nombre(params) { ... }
 metodo
     : PUBLIC (tipo | VOID) (LBRACKET RBRACKET)* ID LPAREN parametros? RPAREN bloque
     ;
 
+// lista de parametros separados por coma
 parametros
     : parametro (COMMA parametro)*
     ;
 
+// un parametro: tipo nombre
 parametro
     : tipo (LBRACKET RBRACKET)* ID
     ;
 
+// tipo primitivo o nombre de una clase
 tipo
     : tipoPrimitivo
     | ID          // tipo objeto: el nombre de otra clase definida en otro archivo .z
     ;
 
+// int, double, char, boolean, String
 tipoPrimitivo
     : KW_INT
     | KW_DOUBLE
@@ -66,10 +71,12 @@ tipoPrimitivo
     | KW_STRING
     ;
 
+// { sentencias }
 bloque
     : LBRACE sentencia* RBRACE
     ;
 
+// todo lo que puede ir dentro de un bloque
 sentencia
     : declaracionVariable
     | sentenciaExpresion
@@ -84,6 +91,7 @@ sentencia
     | bloque
     ;
 
+// tipo nombre = valor;
 declaracionVariable
     : tipo (LBRACKET RBRACKET)* ID (LBRACKET RBRACKET)* (ASSIGN expresion)? SEMI
     ;
@@ -95,10 +103,12 @@ sentenciaExpresion
     : expresion (operadorAsignacion expresion)? SEMI
     ;
 
+// = += -= *=
 operadorAsignacion
     : ASSIGN | PLUS_ASSIGN | MINUS_ASSIGN | STAR_ASSIGN
     ;
 
+// if / else if / else
 sentenciaIf
     : IF LPAREN expresion RPAREN sentenciaOBloque
       (ELSE IF LPAREN expresion RPAREN sentenciaOBloque)*
@@ -111,28 +121,34 @@ sentenciaOBloque
     | sentencia
     ;
 
+// switch con sus case y default
 sentenciaSwitch
     : SWITCH LPAREN expresion RPAREN LBRACE casoSwitch* casoDefault? RBRACE
     ;
 
+// case valor: sentencias
 casoSwitch
     : CASE literalCaso COLON sentencia*
     ;
 
+// default: sentencias
 casoDefault
     : DEFAULT COLON sentencia*
     ;
 
+// valores permitidos en un case
 literalCaso
     : INT_LITERAL
     | STRING_LITERAL
     | CHAR_LITERAL
     ;
 
+// for (init; condicion; update)
 sentenciaFor
     : FOR LPAREN forInit? SEMI expresion? SEMI forUpdate? RPAREN sentenciaOBloque
     ;
 
+// declaracion o expresiones al inicio del for
 forInit
     : declaracionVariableSinPuntoYComa
     | expresionLista
@@ -143,30 +159,37 @@ declaracionVariableSinPuntoYComa
     : tipo (LBRACKET RBRACKET)* ID (ASSIGN expresion)?
     ;
 
+// lo que se ejecuta al final de cada vuelta
 forUpdate
     : expresionLista
     ;
 
+// expresiones separadas por coma
 expresionLista
     : expresion (COMMA expresion)*
     ;
 
+// while (condicion)
 sentenciaWhile
     : WHILE LPAREN expresion RPAREN sentenciaOBloque
     ;
 
+// do { } while (condicion);
 sentenciaDoWhile
     : DO bloque WHILE LPAREN expresion RPAREN SEMI
     ;
 
+// return con valor opcional
 sentenciaReturn
     : RETURN expresion? SEMI
     ;
 
+// break;
 sentenciaBreak
     : BREAK SEMI
     ;
 
+// continue;
 sentenciaContinue
     : CONTINUE SEMI
     ;
@@ -205,6 +228,7 @@ expresion
     | NULL                                                       # expNulo
     ;
 
+// argumentos de una llamada
 argumentos
     : expresion (COMMA expresion)*
     ;
@@ -241,6 +265,7 @@ PRINTLN   : 'println' ;
 PRINT     : 'print' ;
 READLN    : 'readln' ;
 
+// operadores de dos caracteres (van antes que los de uno)
 PLUS_ASSIGN : '+=' ;
 MINUS_ASSIGN: '-=' ;
 STAR_ASSIGN : '*=' ;
@@ -253,6 +278,7 @@ GE  : '>=' ;
 AND : '&&' ;
 OR  : '||' ;
 
+// operadores y signos de un caracter
 PLUS   : '+' ;
 MINUS  : '-' ;
 STAR   : '*' ;
@@ -274,13 +300,16 @@ SEMI   : ';' ;
 COMMA  : ',' ;
 DOT    : '.' ;
 
+// literales: numeros, caracteres y cadenas
 DOUBLE_LITERAL: [0-9]+ '.' [0-9]+ ;
 INT_LITERAL   : [0-9]+ ;
 CHAR_LITERAL  : '\'' ( ~['\\\r\n] | '\\' . ) '\'' ;
 STRING_LITERAL: '"' ( ~["\\\r\n] | '\\' . )* '"' ;
 
+// identificadores
 ID: [a-zA-Z_][a-zA-Z_0-9]* ;
 
+// comentarios: al canal oculto para que el editor los pueda colorear
 LINE_COMMENT : '//' ~[\r\n]* -> channel(HIDDEN) ;
 BLOCK_COMMENT: '/*' .*? '*/' -> channel(HIDDEN) ;
 WS           : [ \t\r\n]+ -> skip ;

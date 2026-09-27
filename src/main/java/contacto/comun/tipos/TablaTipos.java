@@ -26,6 +26,7 @@ public final class TablaTipos {
 
     // ---- Operaciones binarias --------------------------------------------------------
 
+    // Tipo del resultado de "izquierdo op derecho", o error si la operacion no es valida
     public static Tipo resultadoBinario(Tipo izquierdo, Operador operador, Tipo derecho) {
         if (izquierdo == null || derecho == null || operador == null) {
             return Tipo.error();
@@ -67,10 +68,12 @@ public final class TablaTipos {
         return resultadoAritmetica(izquierdo, derecho);
     }
 
+    // true si es una cadena simple (no arreglo de cadenas)
     private static boolean esCadenaEscalar(Tipo tipo) {
         return tipo.esEscalar() && tipo.getPrimitivo() == TipoPrimitivo.CADENA;
     }
 
+    // - * / %: solo numeros; si alguno es decimal, el resultado es decimal
     private static Tipo resultadoAritmetica(Tipo izquierdo, Tipo derecho) {
         if (!izquierdo.esNumerico() || !derecho.esNumerico()) {
             return Tipo.error();
@@ -80,6 +83,7 @@ public final class TablaTipos {
         return hayDecimal ? Tipo.decimal() : Tipo.entero();
     }
 
+    // < > <= >=: solo numeros, el resultado es booleano
     private static Tipo resultadoRelacional(Tipo izquierdo, Tipo derecho) {
         if (!izquierdo.esNumerico() || !derecho.esNumerico()) {
             return Tipo.error();
@@ -87,6 +91,7 @@ public final class TablaTipos {
         return Tipo.booleano();
     }
 
+    // == !=: numeros entre si, mismo tipo, u objeto contra null
     private static Tipo resultadoIgualdad(Tipo izquierdo, Tipo derecho) {
         // null == objeto / objeto == null: siempre valido
         if (izquierdo.esNulo() || derecho.esNulo()) {
@@ -105,6 +110,7 @@ public final class TablaTipos {
         return Tipo.error();
     }
 
+    // && ||: los dos lados deben ser booleanos
     private static Tipo resultadoLogico(Tipo izquierdo, Tipo derecho) {
         if (!izquierdo.esBooleano() || !derecho.esBooleano()) {
             return Tipo.error();
@@ -114,6 +120,7 @@ public final class TablaTipos {
 
     // ---- Operaciones unarias --------------------------------------------------------
 
+    // -x solo para numeros, !x solo para booleanos
     public static Tipo resultadoUnario(Operador operador, Tipo operando) {
         if (operador == null || operando == null || operando.esError()) {
             return Tipo.error();
@@ -152,21 +159,25 @@ public final class TablaTipos {
         return false;
     }
 
+    // Una condicion de si/mientras/para debe ser booleana (o error, para no repetir mensajes)
     public static boolean esCondicionValida(Tipo tipo) {
         return tipo != null && (tipo.esError() || tipo.esBooleano());
     }
 
     // ---- Mensajes de error -------------------------------------------------------------
 
+    // Mensaje de error para una operacion binaria invalida
     public static String mensajeBinario(Tipo izquierdo, Operador operador, Tipo derecho) {
         return "El operador '" + operador + "' no se puede aplicar entre "
                 + izquierdo + " y " + derecho;
     }
 
+    // Mensaje de error para una operacion unaria invalida
     public static String mensajeUnario(Operador operador, Tipo operando) {
         return "El operador '" + operador + "' no se puede aplicar a " + operando;
     }
 
+    // Mensaje de error para una asignacion con tipos incompatibles
     public static String mensajeAsignacion(Tipo destino, Tipo origen) {
         return "No se puede asignar un valor de tipo " + origen
                 + " a una variable de tipo " + destino;

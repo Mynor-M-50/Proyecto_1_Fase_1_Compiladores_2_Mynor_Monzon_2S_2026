@@ -150,6 +150,7 @@ public final class RuntimeC {
         return sb.toString();
     }
 
+    // Tipo C sin los niveles de arreglo (esos los agrega tipoC con '*')
     private static String tipoBaseC(Tipo tipo) {
         if (tipo.getPrimitivo() == null) {
             return "int";

@@ -20,6 +20,7 @@ public final class FabricaResaltador {
         return null; // extension desconocida: se edita sin colorear
     }
 
+    // true si es .z, .y o .pig
     public static boolean esArchivoDelProyecto(String nombreArchivo) {
         return paraArchivo(nombreArchivo) != null;
     }

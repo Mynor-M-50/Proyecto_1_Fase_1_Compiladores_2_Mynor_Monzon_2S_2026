@@ -7,8 +7,16 @@ import org.antlr.v4.runtime.Token;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Coloreado de archivos .pig: los tokeniza con el mismo PigLatinLexer
+ * que usa el compilador (no una libreria aparte) y clasifica cada token
+ * en una categoria de color (palabra clave, tipo, cadena, numero,
+ * comentario o identificador). Los comentarios llegan porque la
+ * gramatica los manda al canal HIDDEN en vez de descartarlos.
+ */
 public class ResaltadorPigLatin implements ResaltadorSintaxis {
 
+    // Pasa el texto por el lexer de Pig Latin y guarda la posicion y categoria de cada token
     @Override
     public List<TokenColoreado> tokenizar(String texto) {
         List<TokenColoreado> resultado = new ArrayList<>();
@@ -25,6 +33,7 @@ public class ResaltadorPigLatin implements ResaltadorSintaxis {
         return resultado;
     }
 
+    // Categoria de color de cada tipo de token del lexer
     private CategoriaToken categoriaDe(int tipo) {
         if (tipo == PigLatinLexer.VARIABILES || tipo == PigLatinLexer.MAIOR || tipo == PigLatinLexer.FIN_PROGRAMA
                 || tipo == PigLatinLexer.IMPORT || tipo == PigLatinLexer.ESTO || tipo == PigLatinLexer.SERIES

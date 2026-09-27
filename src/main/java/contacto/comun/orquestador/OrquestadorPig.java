@@ -67,6 +67,11 @@ import java.util.Set;
  */
 public final class OrquestadorPig {
 
+    /**
+     * Lo que devuelve compilar(): los errores (si hay, lo demas queda en
+     * null), la tabla de simbolos del .pig, las cuartetas de cada archivo
+     * y el codigo C final.
+     */
     public static final class Resultado {
         public final RecolectorErrores errores = new RecolectorErrores();
         public TablaSimbolos tablaPig;
@@ -97,6 +102,7 @@ public final class OrquestadorPig {
     private OrquestadorPig() {
     }
 
+    // Compila el .pig con todo lo que importa, en las 4 fases del javadoc de la clase
     public static Resultado compilar(Path archivoPig) throws IOException {
         Resultado resultado = new Resultado();
         RecolectorErrores errores = resultado.errores;
@@ -194,6 +200,7 @@ public final class OrquestadorPig {
         return base.resolve(sinExtension + extension);
     }
 
+    // Elige el analizador segun la extension del import (.z o .y)
     private static Importado analizarImportado(Path archivo, RecolectorErrores errores)
             throws IOException {
         String nombre = archivo.getFileName().toString();
@@ -207,6 +214,7 @@ public final class OrquestadorPig {
         return null;
     }
 
+    // Lexer, parser y semantico de un .z; devuelve null si hubo errores
     private static Importado analizarZetariano(Path archivo, RecolectorErrores errores)
             throws IOException {
         String nombreArchivo = archivo.toString();
@@ -228,6 +236,7 @@ public final class OrquestadorPig {
         return new Importado(nombreArchivo, arbol, null, semantico.getTipos());
     }
 
+    // Lexer, parser y semantico de un .y; devuelve null si hubo errores
     private static Importado analizarYLang(Path archivo, RecolectorErrores errores)
             throws IOException {
         String nombreArchivo = archivo.toString();

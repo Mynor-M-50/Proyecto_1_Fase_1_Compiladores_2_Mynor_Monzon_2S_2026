@@ -32,6 +32,7 @@ public class PanelEditor extends JPanel {
     private boolean modificado = false;
     private Runnable alModificar; // avisa a VentanaPrincipal para refrescar el "*" de la pestaña en vivo
 
+    // Configura el editor (fuente, colores del tema), carga el texto y lo colorea
     public PanelEditor(Path archivo, String contenido) {
         super(new BorderLayout());
         this.archivo = archivo;
@@ -71,6 +72,7 @@ public class PanelEditor extends JPanel {
         resaltar();
     }
 
+    // Marca cambios pendientes, avisa a la ventana (para el "*") y reprograma el coloreado
     private void marcarModificado() {
         modificado = true;
         if (alModificar != null) {
@@ -79,10 +81,12 @@ public class PanelEditor extends JPanel {
         temporizadorResaltado.restart();
     }
 
+    // Accion a ejecutar en cada cambio del texto (la pone VentanaPrincipal)
     public void setAlModificar(Runnable alModificar) {
         this.alModificar = alModificar;
     }
 
+    // Tokeniza el texto con el lexer del lenguaje y pinta cada token con su color
     private void resaltar() {
         if (resaltador == null) {
             return; // extension sin resaltador (p.ej. .txt): se edita en texto plano
@@ -141,6 +145,7 @@ public class PanelEditor extends JPanel {
         return modificado;
     }
 
+    // Escribe el contenido en su archivo y quita la marca de modificado
     public void guardar() throws java.io.IOException {
         if (archivo == null) {
             throw new IllegalStateException("Este archivo todavia no tiene una ruta (usar guardar como)");
@@ -149,6 +154,7 @@ public class PanelEditor extends JPanel {
         modificado = false;
     }
 
+    // Nombre del archivo, con " *" si tiene cambios sin guardar
     public String getNombrePestana() {
         String base = (archivo != null) ? archivo.getFileName().toString() : "Sin titulo";
         return modificado ? base + " *" : base;

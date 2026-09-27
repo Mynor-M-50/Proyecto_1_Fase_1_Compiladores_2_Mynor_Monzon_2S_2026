@@ -36,6 +36,7 @@ public class Ambito {
         return true;
     }
 
+    // Busca SOLO en este ambito, sin subir a los padres
     public Simbolo buscarLocal(String nombre) {
         return simbolos.get(nombre);
     }

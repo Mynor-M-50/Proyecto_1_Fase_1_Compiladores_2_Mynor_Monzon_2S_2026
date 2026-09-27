@@ -14,6 +14,7 @@ public class SaltoCuarteta extends Cuarteta {
         return etiquetaDestino;
     }
 
+    // goto etiqueta;
     @Override
     public void generarC(StringBuilder codigo) {
         codigo.append("goto ").append(etiquetaDestino).append(";\n");

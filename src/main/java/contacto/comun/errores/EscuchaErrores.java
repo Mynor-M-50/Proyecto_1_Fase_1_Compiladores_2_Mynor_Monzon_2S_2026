@@ -24,6 +24,7 @@ public final class EscuchaErrores extends BaseErrorListener {
         this.archivo = archivo;
     }
 
+    // ANTLR llama aqui en cada error lexico/sintactico: se guarda en vez de imprimirse en consola
     @Override
     public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol,
                              int linea, int columna, String mensaje,

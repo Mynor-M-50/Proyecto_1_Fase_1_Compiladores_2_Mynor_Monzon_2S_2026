@@ -16,6 +16,7 @@ public class RetornoCuarteta extends Cuarteta {
         return valor;
     }
 
+    // return; o return valor;
     @Override
     public void generarC(StringBuilder codigo) {
         codigo.append("return");

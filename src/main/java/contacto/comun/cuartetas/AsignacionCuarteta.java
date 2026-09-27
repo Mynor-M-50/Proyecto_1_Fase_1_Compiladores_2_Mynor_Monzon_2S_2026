@@ -22,6 +22,7 @@ public class AsignacionCuarteta extends Cuarteta {
         return origen;
     }
 
+    // destino = origen;
     @Override
     public void generarC(StringBuilder codigo) {
         destino.generarC(codigo);

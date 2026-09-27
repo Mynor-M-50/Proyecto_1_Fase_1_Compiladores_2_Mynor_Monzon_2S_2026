@@ -22,6 +22,7 @@ public final class TemaEditor {
     private TemaEditor() {
     }
 
+    // Color de cada categoria de token
     public static Color colorDe(CategoriaToken categoria) {
         switch (categoria) {
             case PALABRA_CLAVE: return PALABRA_CLAVE;

@@ -57,10 +57,12 @@ public class Simbolo {
         this.nodoDefinicion = nodoDefinicion;
     }
 
+    // true si se puede llamar: funcion, metodo o constructor
     public boolean esInvocable() {
         return rol == RolSimbolo.FUNCION || rol == RolSimbolo.METODO || rol == RolSimbolo.CONSTRUCTOR;
     }
 
+    // true si define un tipo nuevo: estructura o clase
     public boolean esTipoDefinido() {
         return rol == RolSimbolo.ESTRUCTURA || rol == RolSimbolo.CLASE;
     }

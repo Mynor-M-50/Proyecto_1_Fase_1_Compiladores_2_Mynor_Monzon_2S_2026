@@ -66,10 +66,12 @@ public final class ModeloPrograma {
         public boolean esClase() { return esClase; }
         public List<Variable> getCampos() { return campos; }
 
+        // Agrega un campo al final (el orden importa para los literales {a, b, c} de Y?)
         public void agregarCampo(Variable campo) {
             campos.add(campo);
         }
 
+        // Busca un campo por su nombre en el lenguaje fuente; null si no existe
         public Variable buscarCampo(String nombreCampo) {
             for (Variable campo : campos) {
                 if (campo.getNombre().equals(nombreCampo)) {
@@ -147,6 +149,7 @@ public final class ModeloPrograma {
             this.temporalDesde = gen.getCantidadTemporales();
         }
 
+        // Cierra el rango de cuartetas/temporales abierto en iniciarCuerpo()
         public void terminarCuerpo() {
             this.cuartetaHasta = generador.getCuartetas().size();
             this.temporalHasta = generador.getCantidadTemporales();
@@ -157,6 +160,7 @@ public final class ModeloPrograma {
     private final List<Funcion> funciones = new ArrayList<>();
     private Funcion main;
 
+    // Registra una clase/estructura (si ya existe, devuelve la misma)
     public Estructura registrarEstructura(String nombre, boolean esClase) {
         return estructuras.computeIfAbsent(nombre, n -> new Estructura(n, esClase));
     }
@@ -169,6 +173,7 @@ public final class ModeloPrograma {
         return estructuras.values();
     }
 
+    // El main del .pig se guarda aparte: siempre va al final del .c
     public void agregarFuncion(Funcion funcion) {
         if (funcion.esMain()) {
             main = funcion;
@@ -185,6 +190,7 @@ public final class ModeloPrograma {
         return main;
     }
 
+    // Metodo de una clase por nombre y cantidad de argumentos; null si no existe
     public Funcion buscarMetodo(String clase, String nombre, int aridad) {
         for (Funcion f : funciones) {
             if (f.esMetodo() && f.getClase().equals(clase)
@@ -195,6 +201,7 @@ public final class ModeloPrograma {
         return null;
     }
 
+    // Constructor de una clase segun la cantidad de argumentos; null si no existe
     public Funcion buscarConstructor(String clase, int aridad) {
         for (Funcion f : funciones) {
             if (f.esConstructor() && f.getClase().equals(clase) && f.getAridad() == aridad) {
@@ -204,6 +211,7 @@ public final class ModeloPrograma {
         return null;
     }
 
+    // Funcion de Y? (sin clase) por nombre y cantidad de argumentos
     public Funcion buscarFuncionLibre(String nombre, int aridad) {
         for (Funcion f : funciones) {
             if (f.getClase() == null && f.getNombreFuente().equals(nombre) && f.getAridad() == aridad) {
@@ -243,6 +251,7 @@ public final class ModeloPrograma {
         }
     }
 
+    // Nombre en C sin tomar en cuenta la sobrecarga: new_Clase, Clase_metodo o funcion
     private static String nombreBaseC(Funcion f) {
         if (f.esConstructor()) {
             return "new_" + f.getClase();

@@ -1,12 +1,9 @@
 lexer grammar YLangLexer;
 
 // ============================================================
-// Lexer del lenguaje Y? (Proyecto 1 - Compiladores 2). Extension: .y
-// Los bloques se delimitan por INDENTACION (como Python), no por
-// llaves. INDENT/DEDENT/NEWLINE son tokens SINTETICOS que no genera
-// ninguna regla de este lexer directamente: los arma YLangLexerBase
-// interceptando NEWLINE_RAW en nextToken(). Ver ese archivo para el
-// detalle del algoritmo (pila de niveles de indentacion).
+// Y? (.y): lexer. Como los bloques se marcan con indentacion,
+// NEWLINE, INDENT y DEDENT no salen de ninguna regla de aca: los
+// arma YLangLexerBase a partir de NEWLINE_RAW.
 // ============================================================
 
 options {
@@ -38,14 +35,17 @@ LEER      : 'leer' ;
 VERDADERO : 'verdadero' ;
 FALSO     : 'falso' ;
 
+// tipos primitivos
 KW_ENTERO  : 'entero' ;
 KW_FLOTANTE: 'flotante' ;
 KW_CARACTER: 'caracter' ;
 KW_CADENA  : 'cadena' ;
 KW_BOOL    : 'bool' ;
 
+// flecha del tipo de retorno: definir f() -> entero:
 ARROW: '->' ;
 
+// operadores de dos caracteres (van antes que los de uno)
 PLUSPLUS  : '++' ;
 MINUSMINUS: '--' ;
 EQ  : '==' ;
@@ -53,6 +53,7 @@ NEQ : '!=' ;
 AND : '&&' ;
 OR  : '||' ;
 
+// operadores y signos de un caracter
 PLUS  : '+' ;
 MINUS : '-' ;
 STAR  : '*' ;
@@ -72,13 +73,16 @@ COMMA : ',' ;
 DOT   : '.' ;
 SEMI  : ';' ;   // solo se usa dentro del encabezado de "para(...)"
 
+// literales: numeros, caracteres y cadenas
 FLOTANTE_LITERAL: [0-9]+ '.' [0-9]+ ;
 ENTERO_LITERAL  : [0-9]+ ;
 CARACTER_LITERAL: '\'' ( ~['\\\r\n] | '\\' . ) '\'' ;
 CADENA_LITERAL  : '"' ( ~["\\\r\n] | '\\' . )* '"' ;
 
+// identificadores
 ID: [a-zA-Z_][a-zA-Z_0-9]* ;
 
+// comentarios: al canal oculto para que el editor los pueda colorear
 LINE_COMMENT : '//' ~[\r\n]* -> channel(HIDDEN) ;
 BLOCK_COMMENT: '/*' .*? '*/' -> channel(HIDDEN) ;
 

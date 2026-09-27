@@ -72,6 +72,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
     // Paso 1: firmas
     // =====================================================================
 
+    // Paso 1 (ver javadoc de la clase): registrar en el modelo antes de generar cuerpos
     public void registrarFirmas(ProgramaContext programa) {
         registrarEstructuras(programa);
         for (FuncionDefContext funcionCtx : programa.seccionFunciones().funcionDef()) {
@@ -128,6 +129,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // Cada "definir" es una funcion de C aparte
     @Override
     public Lugar visitFuncionDef(FuncionDefContext ctx) {
         funcionActual = funcionDe.get(ctx);
@@ -152,6 +154,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
     // Sentencias
     // =====================================================================
 
+    // tipo x = valor / tipo a[5] (ya reservado) / Estructura p (ya reservada)
     @Override
     public Lugar visitDeclaracionVariable(DeclaracionVariableContext ctx) {
         // tipo[] x[3][4]: los corchetes van en el tipo y/o despues del nombre
@@ -186,6 +189,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // La variable del "para"
     @Override
     public Lugar visitDeclaracionParaInit(DeclaracionParaInitContext ctx) {
         Tipo tipo = resolverTipo(ctx.tipo(), 0);
@@ -197,6 +201,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // x = valor / o una expresion suelta como imprimir(...) o i++
     @Override
     public Lugar visitSentenciaExpresion(SentenciaExpresionContext ctx) {
         List<ExpresionContext> expresiones = ctx.expresion();
@@ -232,6 +237,8 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         }
     }
 
+    // si / sino / contrario: cada condicion falsa salta a la siguiente rama;
+    // al terminar una rama se salta al final
     @Override
     public Lugar visitSentenciaSi(SentenciaSiContext ctx) {
         List<ExpresionContext> condiciones = ctx.expresion();
@@ -255,6 +262,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // Bloque indentado: las variables declaradas adentro solo existen adentro
     @Override
     public Lugar visitBloqueIndentado(BloqueIndentadoContext ctx) {
         ambitos.entrar();
@@ -265,6 +273,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // inicio: si la condicion es falsa -> fin; cuerpo; goto inicio; fin:
     @Override
     public Lugar visitSentenciaMientras(SentenciaMientrasContext ctx) {
         String etiquetaInicio = gen.nuevaEtiqueta();
@@ -283,6 +292,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // inicio: cuerpo; continua: si la condicion es verdadera -> inicio; fin:
     @Override
     public Lugar visitSentenciaHacerMientras(SentenciaHacerMientrasContext ctx) {
         String etiquetaInicio = gen.nuevaEtiqueta();
@@ -302,6 +312,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // init; inicio: si la condicion es falsa -> fin; cuerpo; continua: update; goto inicio; fin:
     @Override
     public Lugar visitSentenciaPara(SentenciaParaContext ctx) {
         ambitos.entrar(); // la variable del para solo existe dentro del para
@@ -327,6 +338,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // elegir: compara el valor con cada caso y salta al cuerpo del que coincida
     @Override
     public Lugar visitSentenciaElegir(SentenciaElegirContext ctx) {
         Lugar selector = valor(ctx.expresion());
@@ -362,12 +374,14 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // Tipo del literal de un caso (para saber si se compara como cadena)
     private Tipo tipoLiteralCaso(LiteralCasoContext ctx) {
         if (ctx.CADENA_LITERAL() != null) return Tipo.cadena();
         if (ctx.CARACTER_LITERAL() != null) return Tipo.caracter();
         return Tipo.entero();
     }
 
+    // romper: salta al final del ciclo o elegir mas interno
     @Override
     public Lugar visitSentenciaRomper(SentenciaRomperContext ctx) {
         if (!pilaControlFlujo.isEmpty()) {
@@ -388,6 +402,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // retornar valor (un literal {..} se arma con el tipo de retorno de la funcion)
     @Override
     public Lugar visitSentenciaRetornar(SentenciaRetornarContext ctx) {
         Lugar valor = (ctx.expresion() != null) ? valorEsperado(ctx.expresion(), funcionActual.getRetorno()) : null;
@@ -429,6 +444,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return new LiteralLugar("0");
     }
 
+    // Un nombre: su nombre en C si es local/parametro
     @Override
     public Lugar visitExpId(ExpIdContext ctx) {
         String nombre = ctx.ID().getText();
@@ -440,6 +456,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return new NombreLugar(ModeloPrograma.nombreSeguroC(nombre));
     }
 
+    // (x): no genera nada, solo pasa el valor de adentro
     @Override
     public Lugar visitExpParentesis(ExpParentesisContext ctx) {
         Lugar lugar = valor(ctx.expresion());
@@ -447,6 +464,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return lugar;
     }
 
+    // -x o !x en un temporal nuevo
     @Override
     public Lugar visitExpUnario(ExpUnarioContext ctx) {
         Lugar operando = valor(ctx.expresion());
@@ -458,6 +476,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return temp;
     }
 
+    // ++x / --x: suma/resta 1 y el valor de la expresion es la variable ya cambiada
     @Override
     public Lugar visitExpIncDecPrefijo(ExpIncDecPrefijoContext ctx) {
         Lugar lugar = valor(ctx.expresion());
@@ -467,6 +486,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return lugar;
     }
 
+    // x++ / x--: guarda el valor anterior en un temporal y luego suma/resta 1
     @Override
     public Lugar visitExpIncDecSufijo(ExpIncDecSufijoContext ctx) {
         Lugar lugar = valor(ctx.expresion());
@@ -478,6 +498,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return temp;
     }
 
+    // * /
     @Override
     public Lugar visitExpMultiplicativa(ExpMultiplicativaContext ctx) {
         return (ctx.STAR() != null)
@@ -485,6 +506,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, "/", Operador.DIVISION);
     }
 
+    // + / - (el + con una cadena es concatenacion, ver OperacionCuarteta)
     @Override
     public Lugar visitExpAditiva(ExpAditivaContext ctx) {
         return (ctx.PLUS() != null)
@@ -492,6 +514,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, "-", Operador.RESTA);
     }
 
+    // < >
     @Override
     public Lugar visitExpRelacional(ExpRelacionalContext ctx) {
         return (ctx.LT() != null)
@@ -499,6 +522,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, ">", Operador.MAYOR);
     }
 
+    // == / != (entre cadenas compara contenido, ver OperacionCuarteta)
     @Override
     public Lugar visitExpIgualdad(ExpIgualdadContext ctx) {
         return (ctx.EQ() != null)
@@ -506,11 +530,13 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
                 : emitirBinaria(ctx, "!=", Operador.DIFERENTE);
     }
 
+    // a && b en un temporal (booleano)
     @Override
     public Lugar visitExpAnd(ExpAndContext ctx) {
         return emitirBinaria(ctx, "&&", Operador.AND);
     }
 
+    // a || b en un temporal (booleano)
     @Override
     public Lugar visitExpOr(ExpOrContext ctx) {
         return emitirBinaria(ctx, "||", Operador.OR);
@@ -528,6 +554,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return temp;
     }
 
+    // arreglo[indice]
     @Override
     public Lugar visitExpIndice(ExpIndiceContext ctx) {
         Lugar base = valor(ctx.expresion(0));
@@ -536,6 +563,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return new IndiceLugar(base, indice);
     }
 
+    // estructura.campo -> estructura->campo
     @Override
     public Lugar visitExpAcceso(ExpAccesoContext ctx) {
         Lugar base = valor(ctx.expresion());
@@ -552,6 +580,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return new CampoLugar(base, nombreCampo);
     }
 
+    // funcion(args): busca la funcion en el modelo (sin temporal si no retorna nada)
     @Override
     public Lugar visitExpLlamadaFuncion(ExpLlamadaFuncionContext ctx) {
         String nombre = ctx.ID().getText();
@@ -579,6 +608,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return generarLiteral(ctx, tipo(ctx));
     }
 
+    // imprimir(x): con salto de linea
     @Override
     public Lugar visitExpImprimir(ExpImprimirContext ctx) {
         if (ctx.expresion() != null) {
@@ -590,6 +620,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return null;
     }
 
+    // leer(): lee una linea
     @Override
     public Lugar visitExpLeer(ExpLeerContext ctx) {
         Tipo tipo = tipo(ctx).esError() ? Tipo.cadena() : tipo(ctx);
@@ -610,6 +641,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return valor(ctx);
     }
 
+    // {..} como estructura (campo por campo, en orden) o como arreglo (elemento por elemento)
     private Lugar generarLiteral(ExpLiteralCompuestoContext ctx, Tipo esperado) {
         List<ExpresionContext> elementos = ctx.expresion();
         if (esperado != null && esperado.esEstructura() && !esperado.esArreglo()) {
@@ -654,6 +686,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return temp;
     }
 
+    // Copia {a, b, c} elemento por elemento en un arreglo de tamanio fijo del struct
     private void asignarArregloFijo(Lugar destino, ExpLiteralCompuestoContext literal, ModeloPrograma.Variable campo) {
         List<ExpresionContext> elementos = literal.expresion();
         int cantidad = Math.min(elementos.size(), campo.getTamanioFijo());
@@ -678,6 +711,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return (campo != null && campo.getTamanioFijo() > 0) ? campo : null;
     }
 
+    // destino = zc_reservar(sizeof(Estructura))  (campos en 0)
     private void reservarEstructura(Lugar destino, String nombreEstructura) {
         gen.emitirLlamada(destino, null, "new " + nombreEstructura, "zc_reservar",
                 List.of(new LiteralLugar("sizeof(" + nombreEstructura + ")")));
@@ -693,6 +727,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return (lugar != null) ? lugar : new LiteralLugar("0");
     }
 
+    // Tipo de una expresion: el calculado aqui si lo hay, si no el del semantico
     private Tipo tipo(ParseTree ctx) {
         Tipo calculado = tiposCalculados.get(ctx);
         if (calculado != null) {
@@ -702,6 +737,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return (semantico != null) ? semantico : Tipo.error();
     }
 
+    // Guarda el tipo calculado aqui solo si el semantico no pudo resolverlo
     private void calcularTipo(ParseTree ctx, Tipo calculado) {
         Tipo semantico = tiposSemantico.get(ctx);
         if ((semantico == null || semantico.esError()) && calculado != null) {
@@ -709,6 +745,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         }
     }
 
+    // Tipo escrito en el codigo (entero, Persona, entero[]...)
     private Tipo resolverTipo(TipoContext ctx, int corchetesExtra) {
         Tipo base = (ctx.tipoPrimitivo() != null)
                 ? resolverTipoPrimitivo(ctx.tipoPrimitivo())
@@ -725,6 +762,7 @@ public class YLangGeneradorCuartetas extends YLangParserBaseVisitor<Lugar> {
         return Tipo.booleano(); // KW_BOOL
     }
 
+    // Reporta un error semantico encontrado al generar (metodo/campo/funcion que no existe)
     private void error(String mensaje, ParserRuleContext ctx) {
         errores.agregar(TipoError.SEMANTICO, mensaje, ctx.getStart().getLine(),
                 ctx.getStart().getCharPositionInLine(), nombreArchivo);

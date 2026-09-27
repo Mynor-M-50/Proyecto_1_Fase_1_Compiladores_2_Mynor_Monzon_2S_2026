@@ -7,8 +7,16 @@ import org.antlr.v4.runtime.Token;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Coloreado de archivos .z: los tokeniza con el mismo ZetarianoLexer
+ * que usa el compilador (no una libreria aparte) y clasifica cada token
+ * en una categoria de color (palabra clave, tipo, cadena, numero,
+ * comentario o identificador). Los comentarios llegan porque la
+ * gramatica los manda al canal HIDDEN en vez de descartarlos.
+ */
 public class ResaltadorZetariano implements ResaltadorSintaxis {
 
+    // Pasa el texto por el lexer de Zetariano y guarda la posicion y categoria de cada token
     @Override
     public List<TokenColoreado> tokenizar(String texto) {
         List<TokenColoreado> resultado = new ArrayList<>();
@@ -25,6 +33,7 @@ public class ResaltadorZetariano implements ResaltadorSintaxis {
         return resultado;
     }
 
+    // Categoria de color de cada tipo de token del lexer
     private CategoriaToken categoriaDe(int tipo) {
         if (tipo == ZetarianoLexer.PUBLIC || tipo == ZetarianoLexer.PRIVATE || tipo == ZetarianoLexer.THIS
                 || tipo == ZetarianoLexer.CLASS || tipo == ZetarianoLexer.VOID || tipo == ZetarianoLexer.NEW

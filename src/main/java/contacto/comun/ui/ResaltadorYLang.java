@@ -15,6 +15,7 @@ import java.util.List;
  */
 public class ResaltadorYLang implements ResaltadorSintaxis {
 
+    // Pasa el texto por el lexer de Y? y guarda la posicion y categoria de cada token
     @Override
     public List<TokenColoreado> tokenizar(String texto) {
         List<TokenColoreado> resultado = new ArrayList<>();
@@ -34,6 +35,7 @@ public class ResaltadorYLang implements ResaltadorSintaxis {
         return resultado;
     }
 
+    // Categoria de color de cada tipo de token del lexer
     private CategoriaToken categoriaDe(int tipo) {
         if (tipo == YLangLexer.SI || tipo == YLangLexer.ENTONCES || tipo == YLangLexer.SINO
                 || tipo == YLangLexer.CONTRARIO || tipo == YLangLexer.ELEGIR || tipo == YLangLexer.CASO

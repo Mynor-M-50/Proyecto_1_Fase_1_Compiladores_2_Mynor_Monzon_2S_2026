@@ -37,6 +37,7 @@ public final class ControladorCompilacion {
     private ControladorCompilacion() {
     }
 
+    // Segun la extension: .pig compila todo; .z/.y solo revisan sintaxis
     public static void compilar(Path archivo, PanelSalida salida) {
         salida.limpiar();
         String nombre = archivo.getFileName().toString().toLowerCase();
@@ -55,6 +56,7 @@ public final class ControladorCompilacion {
         }
     }
 
+    // Compila con OrquestadorPig, muestra errores/cuartetas/C y guarda el .c junto al .pig
     private static void compilarPig(Path archivo, PanelSalida salida) throws IOException {
         OrquestadorPig.Resultado resultado = OrquestadorPig.compilar(archivo);
 
@@ -98,10 +100,12 @@ public final class ControladorCompilacion {
         return archivo.resolveSibling(base + extension);
     }
 
+    /** Corre lexer+parser de un lenguaje y deja los errores en el recolector (ver parsearZetariano/parsearYLang). */
     private interface Parseador {
         void parsear(CharStream entrada, RecolectorErrores errores, String nombreArchivo);
     }
 
+    // Corre solo lexer+parser de un .z/.y y muestra el resultado
     private static void verificarSintaxis(Path archivo, PanelSalida salida, String lenguaje, Parseador parseador)
             throws IOException {
         RecolectorErrores errores = new RecolectorErrores();
@@ -116,6 +120,7 @@ public final class ControladorCompilacion {
         }
     }
 
+    // Lexer + parser de Zetariano con los errores al recolector
     private static void parsearZetariano(CharStream entrada, RecolectorErrores errores, String nombreArchivo) {
         ZetarianoLexer lexer = new ZetarianoLexer(entrada);
         lexer.removeErrorListeners();
@@ -126,6 +131,7 @@ public final class ControladorCompilacion {
         parser.programa();
     }
 
+    // Lexer + parser de Y? con los errores al recolector
     private static void parsearYLang(CharStream entrada, RecolectorErrores errores, String nombreArchivo) {
         YLangLexer lexer = new YLangLexer(entrada);
         lexer.removeErrorListeners();
@@ -136,6 +142,7 @@ public final class ControladorCompilacion {
         parser.programa();
     }
 
+    // Un error por linea
     private static String formatearErrores(RecolectorErrores errores) {
         StringBuilder sb = new StringBuilder();
         for (ErrorCompilacion error : errores.getErrores()) {
